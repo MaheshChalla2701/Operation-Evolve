@@ -129,7 +129,7 @@ def train_model(config, train_data, val_data, max_iters, device,
                         val_util_accum += v_util.clone()
 
             val_loss = val_loss_sum / EVAL_ITERS
-            val_acc  = float(val_acc_sum) / eval_iters
+            val_acc  = float(val_acc_sum) / EVAL_ITERS
 
             # Normalize utilization across layers
             load_dist = []

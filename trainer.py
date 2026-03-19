@@ -130,7 +130,7 @@ def main():
                         val_util_accum += v_util.clone()
 
             val_loss = val_loss_sum / eval_iters
-            val_acc  = val_acc_sum  / eval_iters
+            val_acc  = float(val_acc_sum) / eval_iters
 
             # Expert utilization: fraction of tokens per expert (averaged across layers)
             load_dist = []
