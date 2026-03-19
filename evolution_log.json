@@ -1,0 +1,84 @@
+[
+  {
+    "cycle": 1,
+    "version": "v0",
+    "new_version": "v0 (speculative)",
+    "timestamp": "00:26:30",
+    "baseline_loss": 1.76293,
+    "accuracy": 0.4724,
+    "changes_applied": [
+      "num_experts: 3 \u2192 4 (cloned expert 0 with 55.8% load)",
+      "router_temperature: 1.0 \u2192 1.15 (soften routing after clone)"
+    ],
+    "decision": "speculative_accept",
+    "config_after": {
+      "vocab_size": 65,
+      "block_size": 128,
+      "n_embd": 128,
+      "n_head": 4,
+      "n_layer": 2,
+      "dropout": 0.1,
+      "num_experts": 4,
+      "top_k": 1,
+      "expert_hidden_dim": 256,
+      "router_temperature": 1.15,
+      "learning_rate": 0.000814,
+      "batch_size": 64
+    }
+  },
+  {
+    "cycle": 2,
+    "version": "v0",
+    "new_version": "v1",
+    "timestamp": "00:29:37",
+    "baseline_loss": 1.89544,
+    "accuracy": 0.43627,
+    "changes_applied": [
+      "learning_rate: 0.000814 \u2192 0.0007733 (gentle LR decay, trend is good)"
+    ],
+    "candidate_loss": 1.75432,
+    "improvement_%": 7.445,
+    "decision": "accepted",
+    "config_after": {
+      "vocab_size": 65,
+      "block_size": 128,
+      "n_embd": 128,
+      "n_head": 4,
+      "n_layer": 2,
+      "dropout": 0.1,
+      "num_experts": 3,
+      "top_k": 1,
+      "expert_hidden_dim": 256,
+      "router_temperature": 1.0,
+      "learning_rate": 0.0007733,
+      "batch_size": 64
+    }
+  },
+  {
+    "cycle": 3,
+    "version": "v1",
+    "new_version": "v1 (speculative)",
+    "timestamp": "00:31:59",
+    "baseline_loss": 1.73303,
+    "accuracy": 0.48725,
+    "changes_applied": [
+      "num_experts: 3 \u2192 4 (cloned expert 0 with 55.4% load)",
+      "router_temperature: 1.0 \u2192 1.15 (soften routing after clone)"
+    ],
+    "decision": "speculative_accept",
+    "config_after": {
+      "vocab_size": 65,
+      "block_size": 128,
+      "n_embd": 128,
+      "n_head": 4,
+      "n_layer": 2,
+      "dropout": 0.1,
+      "num_experts": 4,
+      "top_k": 1,
+      "expert_hidden_dim": 256,
+      "router_temperature": 1.15,
+      "learning_rate": 0.0007733,
+      "batch_size": 64
+    }
+  }
+]
