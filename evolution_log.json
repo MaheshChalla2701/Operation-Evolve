@@ -3,70 +3,15 @@
     "cycle": 1,
     "version": "v0",
     "new_version": "v0",
-    "timestamp": "21:54:21",
-    "baseline_loss": 1.63737,
-    "accuracy": 0.51251,
+    "timestamp": "00:14:06",
+    "baseline_loss": 1.58875,
+    "accuracy": 0.52481,
     "changes_applied": [
-      "Added one expert to increase model capacity, as one expert is dominating 41.8% of the tokens. Decreased router_temperature to 0.95 to encourage more balanced expert utilization."
+      "Added one expert to increase model capacity, as the current experts have utilization loads that are not extremely high, but one expert (0.4125) is dominating. Decreased router_temperature to encourage more balanced expert utilization."
     ],
-    "candidate_loss": 1.80268,
-    "improvement_%": -10.096,
-    "decision": "rejected",
-    "config_after": {
-      "num_experts": 4,
-      "top_k": 1,
-      "expert_hidden_dim": 256,
-      "learning_rate": 0.0007733,
-      "router_temperature": 1.05,
-      "vocab_size": 65,
-      "block_size": 128,
-      "n_embd": 128,
-      "n_head": 4,
-      "n_layer": 2,
-      "dropout": 0.1,
-      "batch_size": 64
-    }
-  },
-  {
-    "cycle": 2,
-    "version": "v0",
-    "new_version": "v0",
-    "timestamp": "21:58:15",
-    "baseline_loss": 1.63432,
-    "accuracy": 0.51235,
-    "changes_applied": [
-      "Added one expert to increase model capacity, as the current experts have utilization between 16% and 39%. Decreased router_temperature to encourage more even distribution of tokens among experts."
-    ],
-    "candidate_loss": 1.78054,
-    "improvement_%": -8.947,
-    "decision": "rejected",
-    "config_after": {
-      "num_experts": 4,
-      "top_k": 1,
-      "expert_hidden_dim": 256,
-      "learning_rate": 0.0007733,
-      "router_temperature": 1.05,
-      "vocab_size": 65,
-      "block_size": 128,
-      "n_embd": 128,
-      "n_head": 4,
-      "n_layer": 2,
-      "dropout": 0.1,
-      "batch_size": 64
-    }
-  },
-  {
-    "cycle": 3,
-    "version": "v0",
-    "new_version": "v0",
-    "timestamp": "22:04:50",
-    "baseline_loss": 1.61716,
-    "accuracy": 0.51892,
-    "changes_applied": [
-      "Added one expert to increase capacity, as one expert is dominating 42% of the tokens. Decreased router_temperature to encourage more balanced expert utilization."
-    ],
-    "candidate_loss": 1.77478,
-    "improvement_%": -9.746,
+    "candidate_loss": 1.81869,
+    "loss_impr_%": -14.473,
+    "acc_impr_%": -6.29,
     "decision": "rejected",
     "config_after": {
       "num_experts": 4,

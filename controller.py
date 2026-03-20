@@ -362,7 +362,8 @@ def main():
             "accuracy":       round(float(metrics.get("accuracy", 0.0)), 5), # type: ignore
             "changes_applied": mutations,
             "candidate_loss": round(float(candidate_loss), 5) if test_ok else None, # type: ignore
-            "improvement_%":  round(float(improvement) * 100, 3) if test_ok else None, # type: ignore
+            "loss_impr_%":    round(float(loss_improvement) * 100, 3) if test_ok else None, # type: ignore
+            "acc_impr_%":     round(float(acc_improvement) * 100, 3) if test_ok else None, # type: ignore
             "decision":       decision,
             "config_after":   copy.deepcopy(config),
         }
