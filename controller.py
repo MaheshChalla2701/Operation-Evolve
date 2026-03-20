@@ -34,7 +34,7 @@ from agent import EvolutionAgent
 
 # ── Evolution Hyper-params ────────────────────────────────────────────────────
 EVOLUTION_CYCLES  = 3      # Number of evolution rounds
-TRAIN_ITERS       = 150    # Iterations for full training round
+TRAIN_ITERS       = 544    # 544 iterations = 2 full epochs on TinyShakespeare (32x128 tokens)
 TEST_ITERS        = 50     # Quick test iterations for candidate model
 EVAL_ITERS        = 20     # Evaluation iterations per checkpoint
 ACCEPT_THRESHOLD  = 0.005  # Accept if val_loss improves by ≥ 0.5%
@@ -193,6 +193,7 @@ def main():
     # ── State for Conditional Verification ────────────────────────────────────
     pending_verification = False
     conditional_baseline = None
+    conditional_baseline_acc = None
     backup_config        = None
 
     for cycle in range(1, EVOLUTION_CYCLES + 1):
@@ -229,12 +230,16 @@ def main():
 
         # ── CONDITIONAL VERIFICATION ────────────────────────────────────
         if pending_verification:
-            improvement = float(conditional_baseline - baseline_loss) / float(conditional_baseline + 1e-8) # type: ignore
-            print(f"\n  [Verify] Testing speculative change from previous cycle...")
-            print(f"  [Verify] Old Loss: {conditional_baseline:.4f} | New Loss: {baseline_loss:.4f} | Improvement: {improvement*100:.2f}%")
+            loss_improvement = float(conditional_baseline - baseline_loss) / float(conditional_baseline + 1e-8) # type: ignore
+            acc_improvement = metrics["accuracy"] - conditional_baseline_acc # type: ignore
             
-            if improvement > ACCEPT_THRESHOLD:
-                print(f"  ✅  CONFIRMED — Mutation kept! (Improvement: {improvement*100:.2f}%)")
+            print(f"\n  [Verify] Testing speculative change from previous cycle...")
+            print(f"  [Verify] Old Loss: {conditional_baseline:.4f} | New Loss: {baseline_loss:.4f} | Loss Impr: {loss_improvement*100:.2f}%")
+            print(f"  [Verify] Old Acc: {conditional_baseline_acc*100:.1f}% | New Acc: {metrics['accuracy']*100:.1f}% | Acc Impr: {acc_improvement*100:.2f}%")
+            
+            # Acceptance condition: Better loss OR Better Accuracy
+            if loss_improvement > ACCEPT_THRESHOLD or acc_improvement > 0.001:
+                print(f"  ✅  CONFIRMED — Mutation kept! (Loss Impr: {loss_improvement*100:.2f}%, Acc Impr: {acc_improvement*100:.2f}%)")
                 torch.save(model.state_dict(), BEST_WEIGHTS)
                 shutil.copy2(BEST_WEIGHTS, BACKUP_WEIGHTS)
                 model_version += 1
@@ -288,6 +293,7 @@ def main():
             
             backup_config = copy.deepcopy(config)
             conditional_baseline = baseline_loss
+            conditional_baseline_acc = metrics["accuracy"]
             pending_verification = True
 
             config = proposed_config
@@ -330,8 +336,11 @@ def main():
         except Exception as e:
             print(f"  [TEST] ⚠️  Candidate crashed: {e}")
 
-        improvement = float(baseline_loss - candidate_loss) / float(baseline_loss + 1e-8) # type: ignore
-        accepted    = test_ok and (improvement > ACCEPT_THRESHOLD)
+        loss_improvement = float(baseline_loss - candidate_loss) / float(baseline_loss + 1e-8) # type: ignore
+        acc_improvement  = candidate_metrics.get('accuracy', 0) - metrics["accuracy"]
+        
+        # Accepted if candidate loss is better OR accuracy is better
+        accepted    = test_ok and (loss_improvement > ACCEPT_THRESHOLD or acc_improvement > 0.001)
 
         if accepted:
             model_version += 1

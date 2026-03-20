@@ -2,16 +2,16 @@
   {
     "cycle": 1,
     "version": "v0",
-    "new_version": "v1",
-    "timestamp": "01:16:32",
-    "baseline_loss": 1.76793,
-    "accuracy": 0.47355,
+    "new_version": "v0",
+    "timestamp": "21:54:21",
+    "baseline_loss": 1.63737,
+    "accuracy": 0.51251,
     "changes_applied": [
-      "Decreased router_temperature from 1.15 to 1.05 to encourage more balanced expert utilization, as one expert is dominating with 41.97% of the tokens"
+      "Added one expert to increase model capacity, as one expert is dominating 41.8% of the tokens. Decreased router_temperature to 0.95 to encourage more balanced expert utilization."
     ],
-    "candidate_loss": 1.75639,
-    "improvement_%": 0.653,
-    "decision": "accepted",
+    "candidate_loss": 1.80268,
+    "improvement_%": -10.096,
+    "decision": "rejected",
     "config_after": {
       "num_experts": 4,
       "top_k": 1,
@@ -29,17 +29,16 @@
   },
   {
     "cycle": 2,
-    "version": "v1",
-    "new_version": "v1",
-    "timestamp": "01:18:30",
-    "baseline_loss": 1.74573,
-    "accuracy": 0.48122,
+    "version": "v0",
+    "new_version": "v0",
+    "timestamp": "21:58:15",
+    "baseline_loss": 1.63432,
+    "accuracy": 0.51235,
     "changes_applied": [
-      "Added one expert to increase model capacity, as the current experts are not fully utilized and the best validation loss is still relatively high.",
-      "Decreased router_temperature to encourage more balanced expert utilization and prevent dominance by a single expert."
+      "Added one expert to increase model capacity, as the current experts have utilization between 16% and 39%. Decreased router_temperature to encourage more even distribution of tokens among experts."
     ],
-    "candidate_loss": 1.90539,
-    "improvement_%": -9.146,
+    "candidate_loss": 1.78054,
+    "improvement_%": -8.947,
     "decision": "rejected",
     "config_after": {
       "num_experts": 4,
@@ -58,16 +57,16 @@
   },
   {
     "cycle": 3,
-    "version": "v1",
-    "new_version": "v1",
-    "timestamp": "01:20:18",
-    "baseline_loss": 1.71958,
-    "accuracy": 0.48262,
+    "version": "v0",
+    "new_version": "v0",
+    "timestamp": "22:04:50",
+    "baseline_loss": 1.61716,
+    "accuracy": 0.51892,
     "changes_applied": [
-      "Added one expert to increase capacity, as no single expert dominates (max utilization is 41.7%). Decreased router_temperature to 0.95 to encourage more balanced expert utilization."
+      "Added one expert to increase capacity, as one expert is dominating 42% of the tokens. Decreased router_temperature to encourage more balanced expert utilization."
     ],
-    "candidate_loss": 1.83398,
-    "improvement_%": -6.653,
+    "candidate_loss": 1.77478,
+    "improvement_%": -9.746,
     "decision": "rejected",
     "config_after": {
       "num_experts": 4,
