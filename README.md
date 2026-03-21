@@ -1,5 +1,8 @@
 # Operation Evolve 🧬
 
+**AI systems that combine transformers, agentic AI, and feedback loops to build adaptive systems that evolve their behavior and performance over time.**
+
+
 A **Self-Improving AI System** built with PyTorch. A Sparse Mixture of Experts (MoE) Transformer autonomously evolves its own architecture using an LLM-Agent (Groq/Llama 3) based on its own training performance metrics.
 
 ## How It Works

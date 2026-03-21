@@ -27,5 +27,34 @@
       "dropout": 0.1,
       "batch_size": 64
     }
+  },
+  {
+    "cycle": 2,
+    "version": "v0",
+    "new_version": "v0",
+    "timestamp": "00:21:13",
+    "baseline_loss": 1.58653,
+    "accuracy": 0.52636,
+    "changes_applied": [
+      "Added one expert to increase capacity, since no single expert dominates and utilization is relatively balanced. Decreased router_temperature to encourage more focused routing and prevent underutilization."
+    ],
+    "candidate_loss": 1.78945,
+    "loss_impr_%": -12.79,
+    "acc_impr_%": -5.462,
+    "decision": "rejected",
+    "config_after": {
+      "num_experts": 4,
+      "top_k": 1,
+      "expert_hidden_dim": 256,
+      "learning_rate": 0.0007733,
+      "router_temperature": 1.05,
+      "vocab_size": 65,
+      "block_size": 128,
+      "n_embd": 128,
+      "n_head": 4,
+      "n_layer": 2,
+      "dropout": 0.1,
+      "batch_size": 64
+    }
   }
 ]
