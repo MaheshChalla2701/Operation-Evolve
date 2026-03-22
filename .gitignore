@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+
+# Environment / Secrets — NEVER commit these
+.env
+*.env
+
+# Model weights (large binary files)
+*.pt
+*.pth
+*.ckpt
+
+# Logs and metrics (optional to exclude)
+error.log
+
+# VS Code
+.vscode/
+
+# Distribution / packaging
+dist/
+build/
