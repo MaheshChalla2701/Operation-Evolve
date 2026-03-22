@@ -69,23 +69,39 @@ Unlike traditional hyperparameter search algorithms, **Operation Evolve** uses a
 
 ## Setup
 
-1. Install PyTorch and Requests:
+### Local Setup
+1. Install requirements:
 ```bash
-pip install torch requests
+pip install torch requests tiktoken python-dotenv
 ```
 
-2. Export your Groq API Key:
-```bash
-# Windows PowerShell
-$env:GROQ_API_KEY="gsk_..."
-
-# Linux / macOS
-export GROQ_API_KEY="gsk_..."
-```
+2. Add your Groq API Key to a `.env` file (see `.env.example`).
 
 3. Launch the Autonomy Loop:
 ```bash
 python controller.py
+```
+
+### Run on Google Colab (Recommended for GPU)
+The easiest way to run the self-improvement loop with a free GPU:
+
+1. Open a New Notebook in [Google Colab](https://colab.research.google.com/).
+2. Enable the **T4 GPU** (`Runtime` > `Change runtime type` > `T4 GPU`).
+3. Paste and run this single block of code:
+```python
+# Clone the repository directly from GitHub
+!git clone https://github.com/MaheshChalla2701/Operation-Evolve.git
+%cd Operation-Evolve
+
+# Install required dependencies
+!pip install tiktoken python-dotenv requests
+
+# Set your Groq API Key
+import os
+os.environ["GROQ_API_KEY"] = "gsk_your_api_key_here"
+
+# Start the self-improvement loop
+!python controller.py
 ```
 
 ## Included Core Files
