@@ -213,11 +213,9 @@ def main():
     config = load_json(CONFIG_FILE)
 
     # Load data once — shared across all cycles
-    train_data, val_data, vocab_size, stoi, itos = load_data("input.txt")
+    train_data, val_data, vocab_size, encode, decode = load_data("input.txt")
     config["vocab_size"] = vocab_size
     save_json(config, CONFIG_FILE)
-
-    decode        = lambda l: "".join([itos[i] for i in l])
     agent         = EvolutionAgent()
     evolution_log = []          # Tracks all cycles
     perf_history  = []          # Performance summary across versions
