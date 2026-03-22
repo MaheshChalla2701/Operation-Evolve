@@ -27,9 +27,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torch.optim as optim
+import math
 
 from model import SparseMoETransformer
-from trainer import load_data, get_batch
+from trainer import load_data, get_batch, build_optimizer, get_lr, compute_bpb
 from agent import EvolutionAgent
 
 # ── Evolution Hyper-params ────────────────────────────────────────────────────
@@ -64,6 +65,14 @@ def header(text, width=62):
     print(f"  {text}")
     print(f"{'─' * width}")
 
+def raw_model(model):
+    """Return the underlying model even if wrapped by torch.compile."""
+    return getattr(model, '_orig_mod', model)
+
+def save_weights(model, path):
+    """Save weights, unwrapping torch.compile if needed."""
+    torch.save(raw_model(model).state_dict(), path)
+
 
 # ── Core Training Function ────────────────────────────────────────────────────
 
@@ -71,24 +80,36 @@ def train_model(config, train_data, val_data, max_iters, device,
                 init_weights_path=None, label=""):
     """
     Instantiate, optionally warm-start, and train a SparseMoETransformer.
+    Uses Muon + AdamW optimizer, cosine LR schedule, and torch.compile.
 
     Returns:
         model         : trained model
         best_val_loss : float
-        metrics       : dict with loss, accuracy, expert_utilization, history
+        metrics       : dict with loss, accuracy, bpb, expert_utilization, history
     """
     model = SparseMoETransformer(config).to(device)
 
-    # Attempt to load compatible weights (strict=False handles architecture changes)
+    # torch.compile() — ~2x speedup on CUDA (skipped on CPU)
+    if device == "cuda":
+        try:
+            model = torch.compile(model)
+        except Exception:
+            pass  # Silently skip if unsupported
+
+    # Warm-start weights if available (strict=False handles arch changes)
     if init_weights_path and os.path.exists(init_weights_path):
         try:
             state = torch.load(init_weights_path, map_location=device, weights_only=True)
-            model.load_state_dict(state, strict=False)
+            # If model is compiled, access original module
+            raw = getattr(model, '_orig_mod', model)
+            raw.load_state_dict(state, strict=False)
             print(f"    [{label}] Warm-started from {init_weights_path}")
         except Exception as e:
             print(f"    [{label}] Warm-start failed ({e}), training from scratch.")
 
-    optimizer = optim.AdamW(model.parameters(), lr=config["learning_rate"])
+    # Muon for weight matrices + AdamW for embeddings/biases
+    adamw_opt, muon_opt = build_optimizer(getattr(model, '_orig_mod', model), config)
+    base_lr    = config["learning_rate"]
     block_size = config["block_size"]
     batch_size = config["batch_size"]
 
@@ -98,15 +119,23 @@ def train_model(config, train_data, val_data, max_iters, device,
     last_loss     = None
 
     for step in range(max_iters):
+        # ── LR Schedule (warmup + cosine decay) ───────────────────
+        lr = get_lr(step, max_iters, base_lr)
+        for opt in [adamw_opt, muon_opt]:
+            for pg in opt.param_groups:
+                pg["lr"] = lr if opt is adamw_opt else lr * 0.5
+
         model.train()
         xb, yb = get_batch(train_data, block_size, batch_size)
         xb, yb = xb.to(device), yb.to(device)
 
         logits, loss, expert_util, accuracy = model(xb, yb)
-        optimizer.zero_grad(set_to_none=True)
+        adamw_opt.zero_grad(set_to_none=True)
+        muon_opt.zero_grad(set_to_none=True)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        optimizer.step()
+        adamw_opt.step()
+        muon_opt.step()
         last_loss = loss.item()
 
         # ── Evaluation checkpoint ──────────────────────────────────────
@@ -130,8 +159,8 @@ def train_model(config, train_data, val_data, max_iters, device,
 
             val_loss = val_loss_sum / EVAL_ITERS
             val_acc  = float(val_acc_sum) / EVAL_ITERS
+            val_bpb  = compute_bpb(val_loss)  # bits-per-byte metric
 
-            # Normalize utilization across layers
             load_dist = []
             if val_util_accum is not None:
                 total = val_util_accum.sum().item()
@@ -142,16 +171,20 @@ def train_model(config, train_data, val_data, max_iters, device,
                 "step":              step,
                 "train_loss":        round(last_loss, 5),
                 "val_loss":          round(val_loss, 5),
+                "val_bpb":           round(val_bpb, 5),
                 "accuracy":          round(val_acc, 5),
                 "load_distribution": load_dist,
+                "lr":                round(lr, 8),
             })
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
 
     final_load = history[-1]["load_distribution"] if history else []
+    best_bpb   = compute_bpb(best_val_loss)
     metrics = {
         "best_val_loss":      best_val_loss,
+        "best_val_bpb":       best_bpb,
         "final_train_loss":   last_loss or 0.0,
         "accuracy":           history[-1]["accuracy"] if history else 0.0,
         "expert_utilization": final_load,
@@ -240,7 +273,7 @@ def main():
             # Acceptance condition: Better loss OR Better Accuracy
             if loss_improvement > ACCEPT_THRESHOLD or acc_improvement > 0.001:
                 print(f"  ✅  CONFIRMED — Mutation kept! (Loss Impr: {loss_improvement*100:.2f}%, Acc Impr: {acc_improvement*100:.2f}%)")
-                torch.save(model.state_dict(), BEST_WEIGHTS)
+                save_weights(model, BEST_WEIGHTS)
                 shutil.copy2(BEST_WEIGHTS, BACKUP_WEIGHTS)
                 model_version += 1
             else:
@@ -250,14 +283,15 @@ def main():
                 config = backup_config
                 save_json(config, CONFIG_FILE)
                 # reload model structure
-                model = SparseMoETransformer(config).to(device)
+                _m = SparseMoETransformer(config).to(device)
                 if os.path.exists(BEST_WEIGHTS):
-                     model.load_state_dict(torch.load(BEST_WEIGHTS, map_location=device, weights_only=True), strict=False)
+                    _m.load_state_dict(torch.load(BEST_WEIGHTS, map_location=device, weights_only=True), strict=False)
+                model = _m
                 print(f"  [Verify] Rollback complete. Reverted to previous stable configuration.")
             pending_verification = False
 
         # Safety: save current known good/validated weights
-        torch.save(model.state_dict(), BEST_WEIGHTS)
+        save_weights(model, BEST_WEIGHTS)
         shutil.copy2(BEST_WEIGHTS, BACKUP_WEIGHTS)
 
         # ── STEP 2: AGENT proposes mutation ─────────────────────────────
