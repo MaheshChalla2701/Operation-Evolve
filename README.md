@@ -113,3 +113,11 @@ os.environ["GROQ_API_KEY"] = "gsk_your_api_key_here"
 | `trainer.py` | Evaluation module |
 | `agent.py` | LLM API Engine — queries Groq to mutate the JSON architecture |
 | `controller.py` | **Main autonomy loop** |
+
+## Screenshots
+
+![Screenshot 1](assarts/Screenshot%202026-03-22%20195555.png)
+![Screenshot 2](assarts/Screenshot%202026-03-22%20195628.png)
+![Screenshot 3](assarts/Screenshot%202026-03-22%20195701.png)
+![Screenshot 4](assarts/Screenshot%202026-03-22%20195725.png)
+![Screenshot 5](assarts/Screenshot%202026-03-22%20195810.png)
