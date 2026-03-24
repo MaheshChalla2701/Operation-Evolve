@@ -1,60 +1,122 @@
 [
   {
     "cycle": 1,
-    "version": "v0",
-    "new_version": "v0",
-    "timestamp": "00:14:06",
-    "baseline_loss": 1.58875,
-    "accuracy": 0.52481,
-    "changes_applied": [
-      "Added one expert to increase model capacity, as the current experts have utilization loads that are not extremely high, but one expert (0.4125) is dominating. Decreased router_temperature to encourage more balanced expert utilization."
-    ],
-    "candidate_loss": 1.81869,
-    "loss_impr_%": -14.473,
-    "acc_impr_%": -6.29,
-    "decision": "rejected",
-    "config_after": {
-      "num_experts": 4,
-      "top_k": 1,
-      "expert_hidden_dim": 256,
-      "learning_rate": 0.0007733,
-      "router_temperature": 1.05,
-      "vocab_size": 65,
-      "block_size": 128,
+    "rationale": "I am increasing the expert_hidden_dim to provide greater parameter capacity per expert, reducing the num_groups and increasing experts_per_group to promote more specialized experts, decreasing the learning_rate to ensure stability given the larger model size, and adjusting the num_heads and num_layers to balance the model's complexity. The batch_size is increased to improve training efficiency, and the router_temperature is reduced to encourage sharper gating decisions. These changes aim to improve the model's overall performance and expert utilization based on the provided metrics report card.",
+    "baseline_loss": 7.473078012466431,
+    "candidate_loss": 9.826826572418213,
+    "verdict": "REJECTED",
+    "proposed_config": {
       "n_embd": 128,
-      "n_head": 4,
-      "n_layer": 2,
+      "expert_hidden_dim": 1024,
+      "num_groups": 1,
+      "experts_per_group": 32,
+      "router_temperature": 0.5,
+      "learning_rate": 0.0002,
+      "num_heads": 16,
+      "num_layers": 4,
       "dropout": 0.1,
-      "batch_size": 64
+      "batch_size": 8,
+      "vocab_size": 50257
     }
   },
   {
     "cycle": 2,
-    "version": "v0",
-    "new_version": "v0",
-    "timestamp": "00:21:13",
-    "baseline_loss": 1.58653,
-    "accuracy": 0.52636,
-    "changes_applied": [
-      "Added one expert to increase capacity, since no single expert dominates and utilization is relatively balanced. Decreased router_temperature to encourage more focused routing and prevent underutilization."
-    ],
-    "candidate_loss": 1.78945,
-    "loss_impr_%": -12.79,
-    "acc_impr_%": -5.462,
-    "decision": "rejected",
-    "config_after": {
-      "num_experts": 4,
-      "top_k": 1,
-      "expert_hidden_dim": 256,
-      "learning_rate": 0.0007733,
-      "router_temperature": 1.05,
-      "vocab_size": 65,
-      "block_size": 128,
+    "rationale": "I am increasing the expert_hidden_dim to provide greater parameter capacity per expert, reducing the num_groups and increasing experts_per_group to promote more specialized experts, decreasing the learning_rate to ensure stability given the larger model size, and adjusting the router_temperature to control gating sharpness. These changes are based on the observation that the current model has a relatively low accuracy and the load distribution among experts is imbalanced, indicating the need for more specialized and diverse experts.",
+    "baseline_loss": 7.473078012466431,
+    "candidate_loss": 9.113890171051025,
+    "verdict": "REJECTED",
+    "proposed_config": {
       "n_embd": 128,
-      "n_head": 4,
-      "n_layer": 2,
+      "expert_hidden_dim": 1024,
+      "num_groups": 1,
+      "experts_per_group": 32,
+      "router_temperature": 1.0,
+      "learning_rate": 0.0002,
+      "num_heads": 8,
+      "num_layers": 2,
       "dropout": 0.1,
-      "batch_size": 64
+      "batch_size": 4,
+      "vocab_size": 50257
+    }
+  },
+  {
+    "cycle": 3,
+    "rationale": "I am increasing the expert_hidden_dim to provide greater parameter capacity per expert, reducing the num_groups and increasing the experts_per_group to promote more specialized experts, decreasing the learning_rate to ensure stability given the larger model size, and adjusting the router_temperature to control gating sharpness. These changes are based on the observation that the current model has a relatively low accuracy and expert utilization is imbalanced, suggesting that the model could benefit from more capacity and specialization.",
+    "baseline_loss": 7.473078012466431,
+    "candidate_loss": 9.113890171051025,
+    "verdict": "REJECTED",
+    "proposed_config": {
+      "n_embd": 128,
+      "expert_hidden_dim": 1024,
+      "num_groups": 1,
+      "experts_per_group": 32,
+      "router_temperature": 1.0,
+      "learning_rate": 0.0002,
+      "num_heads": 8,
+      "num_layers": 2,
+      "dropout": 0.1,
+      "batch_size": 4,
+      "vocab_size": 50257
+    }
+  },
+  {
+    "cycle": 1,
+    "rationale": "I am adjusting the configuration based on the observation that the current model has a relatively low accuracy and expert utilization is imbalanced. To address this, I am increasing the num_groups and experts_per_group to promote more diversity among experts, while maintaining a moderate expert_hidden_dim. I am also reducing the learning_rate to ensure stability and adjusting the router_temperature to encourage sharper gating decisions. Furthermore, I am increasing the num_heads to enhance the model's ability to capture complex relationships and reducing the dropout to minimize information loss.",
+    "baseline_loss": 7.473078012466431,
+    "candidate_loss": 10.597851276397705,
+    "verdict": "REJECTED",
+    "proposed_config": {
+      "n_embd": 128,
+      "expert_hidden_dim": 256,
+      "num_groups": 4,
+      "experts_per_group": 8,
+      "router_temperature": 0.75,
+      "learning_rate": 0.0002,
+      "num_heads": 16,
+      "num_layers": 2,
+      "dropout": 0.05,
+      "batch_size": 8,
+      "vocab_size": 50257
+    }
+  },
+  {
+    "cycle": 2,
+    "rationale": "I am increasing the num_heads to promote better feature extraction, increasing the num_layers to enhance the model's capacity for learning complex patterns, and reducing the router_temperature to encourage sharper gating decisions. Additionally, I am decreasing the learning_rate to ensure stability given the increased model complexity. The batch_size is increased to improve training efficiency. These changes aim to improve the model's overall performance and expert utilization based on the provided metrics report card.",
+    "baseline_loss": 7.473078012466431,
+    "candidate_loss": 9.944984436035156,
+    "verdict": "REJECTED",
+    "proposed_config": {
+      "n_embd": 128,
+      "expert_hidden_dim": 512,
+      "num_groups": 2,
+      "experts_per_group": 16,
+      "router_temperature": 0.5,
+      "learning_rate": 0.0002,
+      "num_heads": 16,
+      "num_layers": 4,
+      "dropout": 0.1,
+      "batch_size": 8,
+      "vocab_size": 50257
+    }
+  },
+  {
+    "cycle": 3,
+    "rationale": "I am increasing the num_groups and experts_per_group to promote more specialized experts, reducing the expert_hidden_dim to prevent overfitting, and adjusting the learning_rate and router_temperature to control the model's complexity and gating sharpness. The batch_size is increased to improve training efficiency, and the num_heads and num_layers are adjusted to balance the model's complexity. These changes aim to improve the model's overall performance and expert utilization based on the provided metrics report card.",
+    "baseline_loss": 7.473078012466431,
+    "candidate_loss": 10.7998046875,
+    "verdict": "REJECTED",
+    "proposed_config": {
+      "n_embd": 128,
+      "expert_hidden_dim": 256,
+      "num_groups": 4,
+      "experts_per_group": 8,
+      "router_temperature": 0.5,
+      "learning_rate": 0.0002,
+      "num_heads": 4,
+      "num_layers": 1,
+      "dropout": 0.1,
+      "batch_size": 8,
+      "vocab_size": 50257
     }
   }
 ]

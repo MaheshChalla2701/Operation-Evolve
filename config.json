@@ -1,14 +1,13 @@
 {
-  "num_experts": 4,
-  "top_k": 1,
-  "expert_hidden_dim": 256,
-  "learning_rate": 0.0007733,
-  "router_temperature": 1.05,
-  "vocab_size": 65,
-  "block_size": 128,
   "n_embd": 128,
-  "n_head": 4,
-  "n_layer": 2,
+  "expert_hidden_dim": 512,
+  "num_groups": 2,
+  "experts_per_group": 16,
+  "router_temperature": 1.5,
+  "learning_rate": 0.0005,
+  "num_heads": 8,
+  "num_layers": 2,
   "dropout": 0.1,
-  "batch_size": 64
+  "batch_size": 4,
+  "vocab_size": 50257
 }

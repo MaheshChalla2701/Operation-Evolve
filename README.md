@@ -1,123 +1,98 @@
-# Operation Evolve 🧬
+# Operation Evolve: Agentic Mixture-of-Experts (MoE) 🚀
 
-**AI systems that combine transformers, agentic AI, and feedback loops to build adaptive systems that evolve their behavior and performance over time.**
+This repository hosts an **Agentic Self-Optimizing Mixture-of-Experts (MoE) Architecture**. Instead of manually tuning hyperparameters, an AI agent continuously proposes, trains, measures, and evolves the MoE structure across epochs to achieve better validation loss on real-world NLP reasoning workloads.
 
-
-A **Self-Improving AI System** built with PyTorch. A Sparse Mixture of Experts (MoE) Transformer autonomously evolves its own architecture using an LLM-Agent (Groq/Llama 3) based on its own training performance metrics.
-
-## How It Works
-
-```text
-┌─────────────┐      ┌──────────────┐     ┌─────────────────┐      ┌──────────────┐
-│   TRAIN     │────▶│   METRICS    │────▶│   AI AGENT      │────▶│   TEST NEW   │
-│  (150 iters)│      │  metrics.json│     │  (Llama 3)      │      │  (50 iters)  │
-└─────────────┘      └──────────────┘     └─────────────────┘      └──────────────┘
-       ▲                                          │                       │
-       │                 Accept if improved ◀────┘─────── Reject ─────── ┘
-       │                 config.json updated                  (revert)
-       └──────────────────────────────────────────────────────────────────
-```
-
-## Model Architecture
-
-**SparseMoETransformer** — Character-level next-token prediction:
-- 2 × Self-Attention Layers (Causal)
-- 1 × Sparse MoE Layer per block (Top-1 Gating — only 1 expert active per token)
-- Dynamically configured → number of experts, hidden dim, temperature all evolve
+## 🔄 Operation Evolve Cycle
 
 ```mermaid
 graph TD
-    Input[Input Tokens] --> Emb[Token & Positional Embeddings]
-    Emb --> B1[Transformer Block 1]
-    
-    subgraph Transformer Block
-        B_Start((Start)) --> LN1[LayerNorm]
-        LN1 --> Attn[Causal Self-Attention]
-        Attn --> Add1((+ Residual))
-        
-        Add1 --> LN2[LayerNorm]
-        
-        LN2 --> Router{MoE Router Gating}
-        Router -.->|Token i| E1[Expert 1]
-        Router -.->|Token j| E2[Expert 2]
-        Router -.->|Token k| En[Expert N...]
-        
-        E1 --> Combine[Combine Outputs]
-        E2 --> Combine
-        En --> Combine
-        
-        Combine --> Add2((+ Residual))
+    A[Start Controller] --> B[Read Current config.json]
+    B --> C[Evaluate Baseline Loss on Dataset]
+    C --> D[Agentic LLM proposes new hyperparameters]
+    D --> E[Write temp config]
+    E --> F[Run train_eval.py Subprocess]
+    F --> G[Cross-Entropy Validation Loss calculated]
+    G --> H{Is new loss < baseline?}
+    H -- Yes --> I[Accept! Update config.json & log success]
+    H -- No --> J[Reject. Log failure]
+    I --> D
+    J --> D
+```
+
+## 🧠 Hierarchical MoE Transformer Architecture
+
+```mermaid
+flowchart TD
+    subgraph Language Model
+        In[Input Tokens] --> Emb[Token & Positional Embeddings]
+        Emb --> Attn[Causal Multi-Head Attention]
+        Attn --> Context[Context Vectors]
+    end
+
+    subgraph Hierarchical MoE Router
+        Context --> L1[Level 1: Group Router]
+        L1 --> |Select Top Groups| L2[Level 2: Expert Router]
+        L2 --> |Select Experts| Weights[Normalization Weights]
     end
     
-    B1 --> B_Start
-    Add2 --> B2[Transformer Block 2]
+    subgraph FeedForward Experts
+        Weights --> E1[Expert 1]
+        Weights --> E2[Expert 2]
+        Weights --> EN[... Expert N]
+    end
     
-    B2 --> LN_F[Final LayerNorm]
-    LN_F --> Head[Language Modeling Head]
+    E1 --> Out[Sum Weighted Outputs]
+    E2 --> Out
+    EN --> Out
+    
+    Out --> Head[Language Modeling Head]
+    Head --> Pred[Next Token Logits]
 ```
 
+## 🌟 Key Features
 
-## AI Evolution Agent (Groq / Llama-3.3-70B)
+1. **Agentic Evolution Controller** (`controller.py`)
+   - Uses an external LLM (e.g., Groq's `llama-3.3-70b-versatile` or local Ollama networks) as an intelligent hyperparameter search engine.
+   - Proposes structural changes to `config.json` (such as `num_groups`, `experts_per_group`, `d_model`, `d_ff`, and `learning_rate`) based on historical loss logs.
+   - Automatically accepts or rejects proposals if the resulting cross-entropy test loss outperforms the historical baseline.
 
-Unlike traditional hyperparameter search algorithms, **Operation Evolve** uses a true LLM reasoning Agent (`agent.py`). 
+2. **True Causal Language Modeling** (`train_eval.py` & `hierarchical_moe.py`)
+   - Implements a modern Decoder-only Transformer framework complete with Tokenization (GPT-2 BPE) and Standard/Rotary Positional Embeddings.
+   - Multi-Head Causal Attention acts as the context window before discrete tokens pass into the sophisticated 2-Level Hierarchical Routing MoE framework.
+   - `HierarchicalRouter`: Implements dense top-K routing to sub-partition parameters dynamically, saving immense compute per token.
 
-1. `controller.py` trains the baseline model for a full cycle and evaluates Loss, Accuracy, and the Token-Load percentage distributed across every MoE Expert.
-2. The metrics and current architecture are packaged into a JSON prompt and sent to the **Groq API** (`llama-3.3-70b-versatile`).
-3. Llama 3 autonomously "researches" the model's bottleneck. For example, if one Expert handles 45% of tokens, it may artificially lower the `router_temperature`. If capacity is tapped, it may append a brand new Expert to the neural network.
-4. Llama 3 returns a strict JSON payload containing the upgraded `config.json`.
-5. The Controller triggers **Speculative Acceptance**: it tests the AI's proposal. If Val Loss drops, the change becomes the new baseline. If the model crashes or degrades, the Controller safely rolls back the PyTorch weights to the previous checkpoint.
+3. **Multi-Task Benchmarking** (`train_eval.py`)
+   - Trains and evaluates next-token predictions via Cross-Entropy Loss on dynamic subsets of real-world text logic:
+     - 🧮 **GSM8K**: Grade School Math Word Problems.
+     - 🏫 **MMLU**: Massive Multitask Language Understanding (Multiple Choice QA).
+     - 🧠 **ARC-Challenge**: AI2 Reasoning Challenge.
 
-## Setup
+---
 
-### Local Setup
-1. Install requirements:
+## ⚙️ Installation
+
+1. Install Python dependencies:
 ```bash
-pip install torch requests tiktoken python-dotenv
+pip install torch transformers datasets requests python-dotenv
 ```
 
-2. Add your Groq API Key to a `.env` file (see `.env.example`).
+2. Create a `.env` file in the root directory to provide API keys required by `controller.py`:
+```env
+GROQ_API_KEY=gsk_your_api_key_here
+```
 
-3. Launch the Autonomy Loop:
+---
+
+## 🚀 Running the Evolution Loop
+
+Kickstart the autonomous evolution cycle by running the controller loop:
 ```bash
 python controller.py
 ```
 
-### Run on Google Colab (Recommended for GPU)
-The easiest way to run the self-improvement loop with a free GPU:
-
-1. Open a New Notebook in [Google Colab](https://colab.research.google.com/).
-2. Enable the **T4 GPU** (`Runtime` > `Change runtime type` > `T4 GPU`).
-3. Paste and run this single block of code:
-```python
-# Clone the repository directly from GitHub
-!git clone https://github.com/MaheshChalla2701/Operation-Evolve.git
-%cd Operation-Evolve
-
-# Install required dependencies
-!pip install tiktoken python-dotenv requests
-
-# Set your Groq API Key
-import os
-os.environ["GROQ_API_KEY"] = "gsk_your_api_key_here"
-
-# Start the self-improvement loop
-!python controller.py
-```
-
-## Included Core Files
-
-| File | Purpose |
-|---|---|
-| `config.json` | Current model hyperparameters and structure config |
-| `model.py` | SparseMoETransformer PyTorch implementation |
-| `trainer.py` | Evaluation module |
-| `agent.py` | LLM API Engine — queries Groq to mutate the JSON architecture |
-| `controller.py` | **Main autonomy loop** |
-
-## Screenshots
-
-![Screenshot 1](assarts/Screenshot%202026-03-22%20195555.png)
-![Screenshot 2](assarts/Screenshot%202026-03-22%20195628.png)
-![Screenshot 3](assarts/Screenshot%202026-03-22%20195701.png)
-![Screenshot 4](assarts/Screenshot%202026-03-22%20195725.png)
-![Screenshot 5](assarts/Screenshot%202026-03-22%20195810.png)
+### What happens?
+1. **BASELINE**: The script evaluates the current parameters stored in `config.json` to establish the baseline `Validation Loss`.
+2. **PROPOSAL**: The AI generates a hypothesis (modifying model dimensions or learning rate).
+3. **TRAIN & EVALUATE**: `train_eval.py` is spun up in a subprocess utilizing HuggingFace Tokenizers and actual NLP sequences.
+4. **DECISION**: The validation loss (Cross-Entropy next token predictability) is parsed. If lower than the baseline, the AI adopts the new parameters and logs it to `evolution_history.log`.
+5. **LOOP**: The AI uses the log as context for its next hypothesis, slowly descending into the optimal configurations!
