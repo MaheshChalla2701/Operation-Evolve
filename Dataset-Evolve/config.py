@@ -5,9 +5,11 @@ All hyperparameters, paths, and safety thresholds live here.
 Change values here to tune the self-evolving pipeline without
 touching any other module.
 """
-
 import os
 from dataclasses import dataclass, field
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 @dataclass
@@ -83,6 +85,13 @@ class EvolveConfig:
     # ------------------------------------------------------------------ #
     log_level: str = "INFO"          # "DEBUG" | "INFO" | "WARNING"
     print_every_n_epochs: int = 1    # How often to print epoch-level logs
+
+    # ------------------------------------------------------------------ #
+    # LLM Agent                                                             #
+    # ------------------------------------------------------------------ #
+    use_llm_agent: bool = True
+    groq_api_key: str = os.getenv("GROQ_API_KEY", "")
+    llm_model_name: str = "llama-3.3-70b-versatile"
 
     # ------------------------------------------------------------------ #
     # Device                                                                #
