@@ -112,6 +112,64 @@ class SimpleTransformer(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# TransformerLM  – Transformer encoder + tokenizer & embeddings
+# ---------------------------------------------------------------------------
+
+class TransformerLM(BaseModel):
+    """
+    Transformer Language Model for discrete token inputs.
+    Incorporates TikToken tokenizer, token embeddings, and positional embeddings.
+    """
+    def __init__(
+        self,
+        vocab_size: int,
+        max_seq_len: int,
+        d_model: int,
+        num_heads: int,
+        num_layers: int,
+        num_classes: int,
+        dropout: float = 0.1,
+    ):
+        super().__init__()
+        assert d_model % num_heads == 0, (
+            f"d_model ({d_model}) must be divisible by num_heads ({num_heads})"
+        )
+        
+        try:
+            import tiktoken
+            self.tokenizer = tiktoken.get_encoding("gpt2")
+        except ImportError:
+            self.tokenizer = None
+            
+        self.token_emb = nn.Embedding(vocab_size, d_model)
+        self.pos_emb = nn.Embedding(max_seq_len, d_model)
+        
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model,
+            nhead=num_heads,
+            dim_feedforward=d_model * 4,
+            dropout=dropout,
+            batch_first=True,
+        )
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.head = nn.Linear(d_model, num_classes)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x expected to be shape [B, S] containing token IDs
+        B, S = x.size()
+        positions = torch.arange(0, S, dtype=torch.long, device=x.device).unsqueeze(0)
+        
+        x = self.token_emb(x) + self.pos_emb(positions)  # (B, S, d_model)
+        x = self.dropout(x)
+        x = self.encoder(x)                              # (B, S, d_model)
+        
+        # Sequence-level global mean pooling
+        x = x.mean(dim=1)                                # (B, d_model)
+        return self.head(x)                              # (B, num_classes)
+
+
+# ---------------------------------------------------------------------------
 # Factory function
 # ---------------------------------------------------------------------------
 
@@ -138,10 +196,22 @@ def build_model(config: EvolveConfig) -> BaseModel:
             num_layers=config.num_layers,
             num_classes=config.num_classes,
         )
+    elif config.model_type == "TransformerLM":
+        d_model = config.hidden_dim
+        while d_model % config.num_heads != 0:
+            d_model += 1
+        model = TransformerLM(
+            vocab_size=config.vocab_size,
+            max_seq_len=config.max_seq_len,
+            d_model=d_model,
+            num_heads=config.num_heads,
+            num_layers=config.num_layers,
+            num_classes=config.num_classes,
+        )
     else:
         raise ValueError(
             f"Unknown model_type '{config.model_type}'. "
-            "Choose 'SimpleNN' or 'SimpleTransformer'."
+            "Choose 'SimpleNN', 'SimpleTransformer', or 'TransformerLM'."
         )
 
     device = config.get_device()

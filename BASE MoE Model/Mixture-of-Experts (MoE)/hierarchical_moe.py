@@ -1,6 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+try:
+    import tiktoken
+except ImportError:
+    pass
 
 class HierarchicalRouter(nn.Module):
     """
@@ -8,11 +12,12 @@ class HierarchicalRouter(nn.Module):
     Level 1: Select groups where P(group) >= 1 / num_groups.
     Level 2: Select experts where P(expert|group) >= 1 / experts_per_group.
     """
-    def __init__(self, d_model: int, num_groups: int, experts_per_group: int):
+    def __init__(self, d_model: int, num_groups: int, experts_per_group: int, top_k: int = 2):
         super().__init__()
         self.d_model = d_model
         self.num_groups = num_groups
         self.experts_per_group = experts_per_group
+        self.top_k = top_k
         
         # Level 1 gating: W_group
         self.group_gate = nn.Linear(d_model, num_groups, bias=False)
@@ -55,21 +60,36 @@ class HierarchicalRouter(nn.Module):
         # Final weight before normalization = P(group) * P(expert | group)
         final_weights_3d = group_probs.unsqueeze(-1) * expert_probs # [N, G, E_g]
         
-        # Zero out unselected weights
-        selected_weights_3d = final_weights_3d * valid_mask_3d.float() # [N, G, E_g]
-        
         # Flatten to [N, G * E_g] for the MoE layer
         valid_mask = valid_mask_3d.view(N, -1)
-        selected_weights = selected_weights_3d.view(N, -1)
+        final_probs_flat = final_weights_3d.view(N, -1)
+        
+        # --- Apply Minimum Top-K Logic ---
+        # Count how many experts passed the hierarchical threshold for each token
+        num_selected = valid_mask.sum(dim=-1) # [N]
+        
+        # Get the top-k experts globally for each token
+        _, topk_indices = torch.topk(final_probs_flat, self.top_k, dim=-1) # [N, top_k]
+        
+        # Create a boolean mask for the top-k experts
+        topk_mask = torch.zeros_like(valid_mask).scatter_(1, topk_indices, 1).bool() # [N, G * E_g]
+        
+        # Condition: if threshold selected less than top_k experts, fallback to topk_mask
+        use_topk = num_selected < self.top_k # [N]
+        
+        # Final mask combination
+        final_valid_mask = torch.where(use_topk.unsqueeze(-1), topk_mask, valid_mask)
+        
+        # Zero out unselected weights
+        selected_weights = final_probs_flat * final_valid_mask.float() # [N, G * E_g]
         
         # Renormalize weights so they sum to 1 per token
-        # Some tokens might sum to very small numbers if thresholds are weird, but theoretically sum >= avg
         weight_sum = selected_weights.sum(dim=-1, keepdim=True)
-        # Avoid division by zero just in case (e.g. padding tokens or numerical issues)
+        # Avoid division by zero
         weight_sum = torch.clamp(weight_sum, min=1e-9)
         normalized_weights = selected_weights / weight_sum # [N, G * E_g]
 
-        return valid_mask, normalized_weights
+        return final_valid_mask, normalized_weights
 
 
 class Expert(nn.Module):
@@ -85,13 +105,14 @@ class Expert(nn.Module):
 
 
 class HierarchicalMoE(nn.Module):
-    def __init__(self, d_model: int, d_ff: int, num_groups: int, experts_per_group: int):
+    def __init__(self, d_model: int, d_ff: int, num_groups: int, experts_per_group: int, top_k: int = 2):
         super().__init__()
         self.num_groups = num_groups
         self.experts_per_group = experts_per_group
+        self.top_k = top_k
         total_experts = num_groups * experts_per_group
         
-        self.router = HierarchicalRouter(d_model, num_groups, experts_per_group)
+        self.router = HierarchicalRouter(d_model, num_groups, experts_per_group, top_k)
         
         self.experts = nn.ModuleList([
             Expert(d_model, d_ff) for _ in range(total_experts)
@@ -142,3 +163,85 @@ class HierarchicalMoE(nn.Module):
             output = output.view(*original_shape)
             
         return output
+
+class TransformerBlock(nn.Module):
+    """A standard Transformer Block with the Hierarchical MoE injected."""
+    def __init__(self, d_model: int, d_ff: int, num_groups: int, experts_per_group: int, num_heads: int, dropout: float = 0.1, router_top_k: int = 2):
+        super().__init__()
+        self.attn = nn.MultiheadAttention(embed_dim=d_model, num_heads=num_heads, batch_first=True, dropout=dropout)
+        self.ln1 = nn.LayerNorm(d_model)
+        self.moe = HierarchicalMoE(
+            d_model=d_model,
+            d_ff=d_ff,
+            num_groups=num_groups,
+            experts_per_group=experts_per_group,
+            top_k=router_top_k
+        )
+        self.ln2 = nn.LayerNorm(d_model)
+        self.dropout = nn.Dropout(dropout)
+        
+    def forward(self, x, causal_mask=None):
+        # Attention with residual, LayerNorm, and Dropout
+        attn_out, _ = self.attn(self.ln1(x), self.ln1(x), self.ln1(x), attn_mask=causal_mask, is_causal=causal_mask is not None)
+        x = x + self.dropout(attn_out)
+        
+        # MoE with residual, LayerNorm, and Dropout
+        moe_out = self.moe(self.ln2(x))
+        x = x + self.dropout(moe_out)
+        return x
+
+class SimpleTransformerLM(nn.Module):
+    """
+    A full wrapper Language Model showcasing how to integrate
+    tiktoken, input embeddings, positional embeddings, and the MoE.
+    """
+    def __init__(self, vocab_size: int = 50257, d_model: int = 256, d_ff: int = 1024, num_groups: int = 4, experts_per_group: int = 4, num_heads: int = 4, num_layers: int = 2, max_seq_len: int = 512, dropout: float = 0.1, top_k: int = 2):
+        super().__init__()
+        self.d_model = d_model
+        
+        # Tokenizer definition
+        try:
+            import tiktoken
+            self.tokenizer = tiktoken.get_encoding("gpt2")
+        except ImportError:
+            self.tokenizer = None
+            
+        # Input Embedding & Positional Embedding
+        self.token_emb = nn.Embedding(vocab_size, d_model)
+        self.pos_emb = nn.Embedding(max_seq_len, d_model)
+        self.dropout = nn.Dropout(dropout)
+        
+        # Stack multiple MoE-enabled Transformer Blocks
+        self.layers = nn.ModuleList([
+            TransformerBlock(
+                d_model=d_model,
+                d_ff=d_ff,
+                num_groups=num_groups,
+                experts_per_group=experts_per_group,
+                num_heads=num_heads,
+                dropout=dropout,
+                router_top_k=top_k
+            ) for _ in range(num_layers)
+        ])
+        
+        self.ln_f = nn.LayerNorm(d_model)
+        self.head = nn.Linear(d_model, vocab_size)
+
+    def forward(self, x):
+        B, S = x.size()
+        positions = torch.arange(0, S, dtype=torch.long, device=x.device).unsqueeze(0)
+        
+        # Token Embedding + Positional Embedding
+        h = self.token_emb(x) + self.pos_emb(positions)
+        h = self.dropout(h)
+        
+        # Causal Attention Mask (prevents looking at future tokens)
+        causal_mask = nn.Transformer.generate_square_subsequent_mask(S).to(x.device)
+        
+        # Pass through all layers
+        for layer in self.layers:
+            h = layer(h, causal_mask=causal_mask)
+            
+        h = self.ln_f(h)
+        logits = self.head(h)
+        return logits

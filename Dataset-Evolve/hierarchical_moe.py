@@ -8,11 +8,12 @@ class HierarchicalRouter(nn.Module):
     Level 1: Select groups where P(group) >= 1 / num_groups.
     Level 2: Select experts where P(expert|group) >= 1 / experts_per_group.
     """
-    def __init__(self, d_model: int, num_groups: int, experts_per_group: int):
+    def __init__(self, d_model: int, num_groups: int, experts_per_group: int, top_k: int = 2):
         super().__init__()
         self.d_model = d_model
         self.num_groups = num_groups
         self.experts_per_group = experts_per_group
+        self.top_k = top_k
         
         # Level 1 gating: W_group
         self.group_gate = nn.Linear(d_model, num_groups, bias=False)
@@ -55,21 +56,36 @@ class HierarchicalRouter(nn.Module):
         # Final weight before normalization = P(group) * P(expert | group)
         final_weights_3d = group_probs.unsqueeze(-1) * expert_probs # [N, G, E_g]
         
-        # Zero out unselected weights
-        selected_weights_3d = final_weights_3d * valid_mask_3d.float() # [N, G, E_g]
-        
         # Flatten to [N, G * E_g] for the MoE layer
         valid_mask = valid_mask_3d.view(N, -1)
-        selected_weights = selected_weights_3d.view(N, -1)
+        final_probs_flat = final_weights_3d.view(N, -1)
+        
+        # --- Apply Minimum Top-K Logic ---
+        # Count how many experts passed the hierarchical threshold for each token
+        num_selected = valid_mask.sum(dim=-1) # [N]
+        
+        # Get the top-k experts globally for each token
+        _, topk_indices = torch.topk(final_probs_flat, self.top_k, dim=-1) # [N, top_k]
+        
+        # Create a boolean mask for the top-k experts
+        topk_mask = torch.zeros_like(valid_mask).scatter_(1, topk_indices, 1).bool() # [N, G * E_g]
+        
+        # Condition: if threshold selected less than top_k experts, fallback to topk_mask
+        use_topk = num_selected < self.top_k # [N]
+        
+        # Final mask combination
+        final_valid_mask = torch.where(use_topk.unsqueeze(-1), topk_mask, valid_mask)
+        
+        # Zero out unselected weights
+        selected_weights = final_probs_flat * final_valid_mask.float() # [N, G * E_g]
         
         # Renormalize weights so they sum to 1 per token
-        # Some tokens might sum to very small numbers if thresholds are weird, but theoretically sum >= avg
         weight_sum = selected_weights.sum(dim=-1, keepdim=True)
-        # Avoid division by zero just in case (e.g. padding tokens or numerical issues)
+        # Avoid division by zero
         weight_sum = torch.clamp(weight_sum, min=1e-9)
         normalized_weights = selected_weights / weight_sum # [N, G * E_g]
 
-        return valid_mask, normalized_weights
+        return final_valid_mask, normalized_weights
 
 
 class Expert(nn.Module):
@@ -85,13 +101,14 @@ class Expert(nn.Module):
 
 
 class HierarchicalMoE(nn.Module):
-    def __init__(self, d_model: int, d_ff: int, num_groups: int, experts_per_group: int):
+    def __init__(self, d_model: int, d_ff: int, num_groups: int, experts_per_group: int, top_k: int = 2):
         super().__init__()
         self.num_groups = num_groups
         self.experts_per_group = experts_per_group
+        self.top_k = top_k
         total_experts = num_groups * experts_per_group
         
-        self.router = HierarchicalRouter(d_model, num_groups, experts_per_group)
+        self.router = HierarchicalRouter(d_model, num_groups, experts_per_group, top_k)
         
         self.experts = nn.ModuleList([
             Expert(d_model, d_ff) for _ in range(total_experts)

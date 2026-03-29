@@ -82,7 +82,7 @@ flowchart TD
 ```
 
 ### Explanation of Steps:
-1. **Train**: Train the current model (`SimpleNN` or `SimpleTransformer`) on `Dataset_B` plus samples from the Replay Buffer.
+1. **Train**: Train the current model (`SimpleNN`, `SimpleTransformer`, or `TransformerLM` for text tokens) on `Dataset_B` plus samples from the Replay Buffer.
 2. **Evaluate**: Score the model strictly against a pristine, untouchable validation set (`Dataset_A`).
 3. **Generate**: Use the updated model to predict labels for features in `Dataset_B` to create `Dataset_C`.
 4. **Filter**: Reject new candidate samples with low confidence scores or near-duplicates (L2 distance check).
@@ -105,6 +105,15 @@ flowchart TD
 | **Dataset_C** | Fleeting and transient generated candidates (e.g., from generated loops). |
 | **Version History** | Explicit saving of `.pt` files and checkpoints at `data/`. If an iteration causes regression, the ecosystem travels back in time. |
 | **Propose/Apply** | The Agent **strictly proposes**. Updating datasets only occurs legally through explicit functional pipes. |
+
+---
+
+## 🤖 Supported Architectures
+
+The framework allows you to easily hot-swap the model being evolved at any time via the `config.py`:
+- **SimpleNN:** A lightweight, 3-layer Multi-Layer Perceptron optimized for rapid continuous numerical simulations.
+- **SimpleTransformer:** A foundational Transformer encoder treating continuous generic vectors as sequential inputs.
+- **TransformerLM:** A full-featured Language Model that accepts discrete text tokens. It incorporates standard text preprocessing (via `tiktoken` API), Token Embeddings, and Positional Embeddings to maintain production parity with standard text-based Model evolution tasks.
 
 ---
 
@@ -132,7 +141,7 @@ The loop dynamics and hyperparameters are extremely customizable via `config.py`
 
 ```python
 cfg = EvolveConfig(
-    model_type="SimpleTransformer",     # Architectures: SimpleNN, SimpleTransformer
+    model_type="TransformerLM",         # Architectures: SimpleNN, SimpleTransformer, TransformerLM
     num_evolution_loops=10,             # Number of times the dataset will organically grow
     confidence_threshold=0.85,
     rollback_tolerance=0.5,             # 0.5% permitted drop in accuracy before rollback 
