@@ -66,11 +66,11 @@ Instead of feeding every token through a massive dense matrix, the MoE layer sel
 
 - **Level 1 (Group Routing):** 
   - Token vectors pass through a linear gate outputting `num_groups` logits.
-  - A threshold is applied: The token is only routed to a group if its probability $P(group) \ge \frac{1}{\text{num\_groups}}$.
+  - A threshold is applied: The token is only routed to a group if its probability `P(group) >= 1 / num_groups`.
   
 - **Level 2 (Expert Routing):**
   - Within an active group, an expert gate calculates probabilities across `experts_per_group` logits.
-  - A threshold is applied: The token is only routed to an expert if its specific probability $P(expert|group) \ge \frac{1}{\text{experts\_per\_group}}$.
+  - A threshold is applied: The token is only routed to an expert if its specific probability `P(expert | group) >= 1 / experts_per_group`.
 
 - **Top-K Fallback:** To ensure stability (preventing tokens from being completely dropped), a global fallback mandates that every token is processed by at least the `top_k` highest-probability experts overall.
 

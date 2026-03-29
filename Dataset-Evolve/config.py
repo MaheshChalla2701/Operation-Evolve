@@ -34,6 +34,7 @@ class EvolveConfig:
     hidden_dim: int = 64             # Hidden layer size for SimpleNN / d_model for Transformers
     num_heads: int = 4               # Attention heads for SimpleTransformer/TransformerLM
     num_layers: int = 2              # Transformer encoder layers
+    experts: int = 1                 # MoE experts (0 = not used)
     vocab_size: int = 50257          # Vocabulary size for tokenizer (TransformerLM)
     max_seq_len: int = 128           # Maximum sequence length (TransformerLM)
 
@@ -56,10 +57,31 @@ class EvolveConfig:
 
 
     # ------------------------------------------------------------------ #
-    # Replay buffer                                                         #
+    # Replay buffer (legacy — used by pipelined_orchestrator)              #
     # ------------------------------------------------------------------ #
-    replay_buffer_size: int = 150    # Max samples stored in replay buffer
-    replay_mix_ratio: float = 0.15   # Fraction of each training batch from replay buffer
+    replay_buffer_size: int = 150    # Max samples stored in replay buffer (legacy)
+    replay_mix_ratio: float = 0.15   # Fraction of each training batch from replay buffer (legacy)
+
+    # ------------------------------------------------------------------ #
+    # Replay buffer V2 (Hybrid Continual Learning)                         #
+    # ------------------------------------------------------------------ #
+    buffer_size: int = 10_000              # Reservoir replay buffer max capacity
+    replay_sample_ratio: float = 0.20     # Fraction of batch_size drawn from replay
+
+    # ------------------------------------------------------------------ #
+    # LwF (Learning without Forgetting)                                    #
+    # ------------------------------------------------------------------ #
+    lwf_alpha: float = 0.5           # Weight of distillation loss vs CE loss
+    lwf_temperature: float = 2.0     # Softmax temperature for KL distillation
+
+    # ------------------------------------------------------------------ #
+    # Architecture tracking (snapshot of prev committed config)            #
+    # ------------------------------------------------------------------ #
+    prev_model_type: str = ""        # Last committed model_type
+    prev_hidden_dim: int = 0         # Last committed hidden_dim
+    prev_num_heads: int = 0          # Last committed num_heads
+    prev_num_layers: int = 0         # Last committed num_layers
+    prev_experts: int = 0            # Last committed experts count
 
 
 

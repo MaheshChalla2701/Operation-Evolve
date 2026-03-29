@@ -173,3 +173,169 @@ def train_loop(
         "stopped_at": stopped_at,
         "best_loss": best_loss,
     }
+
+
+# ---------------------------------------------------------------------------
+# Hybrid Continual Training loop (LwF + Replay, architecture-aware)
+# ---------------------------------------------------------------------------
+
+def continual_train_loop(
+    model: nn.Module,
+    dataset_b: SyntheticDataset,
+    config: EvolveConfig,
+    replay_buffer=None,           # ReplayBufferV2 | None
+    model_old: Optional[nn.Module] = None,
+    stable_mode: bool = True,
+    loop_idx: int = 0,
+) -> Dict[str, Any]:
+    """
+    Hybrid continual training loop supporting both stable and evolve modes.
+
+    Stable mode (same architecture as last loop):
+        loss = (1 - alpha) * CE(logits, labels) + alpha * KL(logits_new || logits_old)
+             = LwF combined loss   (requires model_old to be set)
+
+    Evolve mode (architecture changed between loops):
+        loss = CE(logits, labels)   only
+        LwF is SKIPPED because architectures differ and old logits are invalid.
+
+    Replay buffer integration:
+        Samples int(batch_size * config.replay_sample_ratio) items from the
+        reservoir replay buffer and prepends them to every mini-batch.
+
+    Parameters
+    ----------
+    model        : nn.Module  (student, mutable)
+    dataset_b    : SyntheticDataset  (current task training data)
+    config       : EvolveConfig
+    replay_buffer: ReplayBufferV2 | None
+    model_old    : nn.Module | None  (frozen teacher clone; needed in stable mode)
+    stable_mode  : bool  (True = LwF enabled if model_old present)
+    loop_idx     : int   (logged for readability)
+
+    Returns
+    -------
+    dict with keys: best_state, history, stopped_at, best_loss, mode
+    """
+    device = config.get_device()
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=config.learning_rate,
+        weight_decay=config.weight_decay,
+    )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode="min", patience=1, factor=0.5
+    )
+
+    use_lwf = stable_mode and (model_old is not None)
+    mode_str = "stable (LwF)" if use_lwf else ("stable" if stable_mode else "evolve")
+    logger.info(
+        f"[Loop {loop_idx}] [Mode] {mode_str} | "
+        f"dataset_B={len(dataset_b)} | epochs={config.epochs_per_loop} | "
+        f"device={device}"
+    )
+    if use_lwf:
+        logger.info(
+            f"[Loop {loop_idx}] LwF alpha={config.lwf_alpha} T={config.lwf_temperature}"
+        )
+        # Move teacher to same device
+        model_old = model_old.to(device)
+
+    # ── Build training dataset (current + replay) ────────────────────────
+    n_replay = int(config.batch_size * config.replay_sample_ratio)
+    train_data = dataset_b
+    if replay_buffer is not None and len(replay_buffer) > 0 and n_replay > 0:
+        replay_sample = replay_buffer.sample(n_replay * 10)   # pre-sample a pool
+        if replay_sample is not None:
+            train_data = ConcatDataset([dataset_b, replay_sample])
+            logger.info(
+                f"[Loop {loop_idx}] Replay contributing {len(replay_sample)} samples "
+                f"(total train size: {len(train_data)})"
+            )
+
+    loader = DataLoader(
+        train_data,
+        batch_size=config.batch_size,
+        shuffle=True,
+        drop_last=False,
+    )
+
+    # ── Training state ───────────────────────────────────────────────────
+    best_loss = float("inf")
+    best_state = copy.deepcopy(model.state_dict())
+    patience_counter = 0
+    history: List[Dict[str, Any]] = []
+    stopped_at = config.epochs_per_loop
+
+    for epoch in range(1, config.epochs_per_loop + 1):
+        model.train()
+        total_loss = 0.0
+        total_samples = 0
+
+        for features, labels in loader:
+            features = features.to(device)
+            labels = labels.to(device)
+
+            optimizer.zero_grad()
+
+            if use_lwf:
+                # Import lazily to avoid hard circular dep at module load
+                from lwf import compute_lwf_loss  # noqa: PLC0415
+                loss = compute_lwf_loss(
+                    model_new=model,
+                    model_old=model_old,
+                    features=features,
+                    labels=labels,
+                    criterion=criterion,
+                    alpha=config.lwf_alpha,
+                    temperature=config.lwf_temperature,
+                )
+            else:
+                logits = model(features)
+                loss = criterion(logits, labels)
+
+            loss.backward()
+            optimizer.step()
+
+            total_loss += loss.item() * features.shape[0]
+            total_samples += features.shape[0]
+
+        epoch_loss = total_loss / max(total_samples, 1)
+        scheduler.step(epoch_loss)
+        history.append({"epoch": epoch, "loss": epoch_loss})
+
+        if epoch % config.print_every_n_epochs == 0:
+            logger.info(
+                f"  [Loop {loop_idx}] Epoch {epoch}/{config.epochs_per_loop} "
+                f"| Loss: {epoch_loss:.4f}"
+            )
+
+        # Early stopping
+        if epoch_loss < best_loss - 1e-4:
+            best_loss = epoch_loss
+            best_state = copy.deepcopy(model.state_dict())
+            patience_counter = 0
+        else:
+            patience_counter += 1
+            if patience_counter >= config.early_stopping_patience:
+                logger.info(
+                    f"  [Loop {loop_idx}] Early stopping at epoch {epoch} "
+                    f"(patience={config.early_stopping_patience})"
+                )
+                stopped_at = epoch
+                break
+
+    model.load_state_dict(best_state)
+    logger.info(
+        f"[Loop {loop_idx}] continual_train_loop done | "
+        f"mode={mode_str} | best_loss={best_loss:.4f} | stopped_at={stopped_at}"
+    )
+
+    return {
+        "best_state": best_state,
+        "history": history,
+        "stopped_at": stopped_at,
+        "best_loss": best_loss,
+        "mode": mode_str,
+    }

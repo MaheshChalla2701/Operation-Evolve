@@ -143,3 +143,85 @@ def compute_confidence(
             all_confs.append(confs.cpu())
 
     return torch.cat(all_confs)
+
+
+# ---------------------------------------------------------------------------
+# Replay buffer evaluation  (used for rollback decisions)
+# ---------------------------------------------------------------------------
+
+def evaluate_replay(
+    model: nn.Module,
+    replay_buffer,          # ReplayBufferV2 | None
+    config: EvolveConfig,
+) -> Dict[str, Any]:
+    """
+    Measure the model's accuracy on a random sample from the replay buffer.
+
+    This quantifies how much past knowledge the model has retained.
+    If replay_accuracy drops significantly (e.g. >10 pp below the best seen
+    value), main.py uses this to trigger a rollback.
+
+    Parameters
+    ----------
+    model         : nn.Module
+    replay_buffer : ReplayBufferV2 | ReplayBuffer | None
+    config        : EvolveConfig
+
+    Returns
+    -------
+    dict with keys:
+        replay_accuracy : float (0–100), -1.0 if buffer empty
+        replay_loss     : float,          -1.0 if buffer empty
+        num_samples     : int
+    """
+    EMPTY = {"replay_accuracy": -1.0, "replay_loss": -1.0, "num_samples": 0}
+
+    if replay_buffer is None or len(replay_buffer) == 0:
+        logger.info("[EvalReplay] Buffer empty — skipping replay evaluation.")
+        return EMPTY
+
+    # Sample a reasonably large probe (up to 1000 samples)
+    probe = replay_buffer.sample(min(1000, len(replay_buffer)))
+    if probe is None:
+        return EMPTY
+
+    device = config.get_device()
+    model.eval()
+    criterion = nn.CrossEntropyLoss()
+    loader = DataLoader(probe, batch_size=config.batch_size, shuffle=False)
+
+    total_loss = 0.0
+    total_correct = 0
+    total_samples = 0
+
+    with torch.no_grad():
+        for features, labels in loader:
+            features = features.to(device)
+            labels = labels.to(device)
+
+            logits = model(features)
+            loss = criterion(logits, labels)
+
+            probs = torch.softmax(logits, dim=-1)
+            _, preds = probs.max(dim=-1)
+
+            total_loss += loss.item() * features.shape[0]
+            total_correct += (preds == labels).sum().item()
+            total_samples += features.shape[0]
+
+    if total_samples == 0:
+        return EMPTY
+
+    avg_loss = total_loss / total_samples
+    accuracy = 100.0 * total_correct / total_samples
+
+    results = {
+        "replay_accuracy": accuracy,
+        "replay_loss": avg_loss,
+        "num_samples": total_samples,
+    }
+    logger.info(
+        f"[EvalReplay] acc={accuracy:.2f}% | loss={avg_loss:.4f} | "
+        f"n={total_samples}"
+    )
+    return results
