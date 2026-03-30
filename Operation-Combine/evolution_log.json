@@ -2,120 +2,127 @@
   {
     "cycle": 1,
     "dataset_slot": 1,
-    "rationale": "To optimize the Hierarchical Mixture-of-Experts (MoE) model, we will increase the embedding dimension and the number of experts per group. This should allow the model to capture more complex patterns in the data and improve its overall performance. We will also introduce a router temperature to help the model learn more effective routing strategies.",
-    "test_loss": 0.0015819293757279715,
+    "rationale": "To optimize the Hierarchical Mixture-of-Experts (MoE) model, we will increase the embedding dimension (n_embd) to 128 to allow for more expressive representations. We will also increase the number of experts per group to 8 to provide more specialized knowledge. The learning rate will be decreased to 0.0005 to facilitate more stable convergence. Additionally, the router temperature will be decreased to 0.5 to encourage more confident routing decisions.",
+    "test_loss": 0.002939120676989357,
     "status": "ACCEPTED"
   },
   {
     "cycle": 2,
     "dataset_slot": 2,
-    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will increase the number of groups and the number of layers. This should allow the model to capture more complex patterns in the data and improve its overall performance. We will also decrease the dropout rate to reduce overfitting and introduce more experts per group to increase the model's capacity.",
-    "test_loss": 0.0027519509413590033,
-    "status": "REJECTED (Rollback)"
+    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will increase the number of groups to 3 to allow for more diverse representations. We will also increase the number of layers to 3 to provide more opportunities for feature extraction. The learning rate will be decreased to 0.0002 to facilitate more stable convergence. Additionally, the router temperature will be decreased to 0.3 to encourage more confident routing decisions.",
+    "test_loss": 0.0010087784829859933,
+    "status": "ACCEPTED"
   },
   {
     "cycle": 3,
     "dataset_slot": 3,
-    "rationale": "To optimize the Hierarchical Mixture-of-Experts (MoE) model, we will decrease the number of groups and increase the number of experts per group. This should allow the model to capture more complex patterns in the data and improve its overall performance. We will also decrease the embedding dimension and increase the expert hidden dimension to focus on more meaningful features. Additionally, we will adjust the router temperature to refine the routing strategy.",
-    "test_loss": 0.022527832314372064,
+    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will increase the expert_hidden_dim to 256 to allow for more complex representations within each expert. We will also increase the num_heads to 8 to provide more opportunities for feature extraction. The learning_rate will be decreased to 0.0001 to facilitate more stable convergence. Additionally, the router_temperature will be decreased to 0.2 to encourage more confident routing decisions.",
+    "test_loss": 0.0034733292118956645,
     "status": "REJECTED (Rollback)"
   },
   {
     "cycle": 4,
     "dataset_slot": 1,
-    "rationale": "To optimize the Hierarchical Mixture-of-Experts (MoE) model, we will increase the embedding dimension to 256 and the expert hidden dimension to 512. This should allow the model to capture more complex patterns in the data and improve its overall performance. We will also decrease the number of groups to 1 and increase the number of experts per group to 16. Additionally, we will adjust the router temperature to 0.05 and decrease the dropout rate to 0.05 to reduce overfitting.",
-    "test_loss": 0.00024157562816981226,
+    "rationale": "Revert to the configuration of cycle 2, which had the best validation loss, and then try to decrease the dropout to 0.05 to reduce the regularization and allow the model to capture more complex patterns. Also, decrease the learning rate to 0.0001 to facilitate more stable convergence.",
+    "test_loss": 0.000996369612403214,
     "status": "ACCEPTED"
   },
   {
     "cycle": 5,
     "dataset_slot": 2,
-    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will increase the number of experts per group and the number of heads. This should allow the model to capture more complex patterns in the data and improve its overall performance. We will also decrease the dropout rate to reduce overfitting and adjust the router temperature to refine the routing strategy.",
-    "test_loss": 0.10132166236639023,
-    "status": "REJECTED (Rollback)"
+    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will increase the num_heads to 8 to provide more opportunities for feature extraction, and decrease the router_temperature to 0.2 to encourage more confident routing decisions. We will also maintain the current configuration for other hyperparameters to build upon the success of the previous cycle.",
+    "test_loss": 0.0009140015641848246,
+    "status": "ACCEPTED"
   },
   {
     "cycle": 6,
     "dataset_slot": 3,
-    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will adjust the expert hidden dimension and the number of heads. This should allow the model to capture more complex patterns in the data and improve its overall performance. We will also maintain the current number of groups and experts per group, and adjust the dropout rate and router temperature to refine the model's performance.",
-    "test_loss": 0.12160881588856379,
+    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the current configuration for most hyperparameters to build upon the success of the previous cycle. We will increase the expert_hidden_dim to 256 to allow for more complex representations within each expert, and decrease the learning_rate to 0.00005 to facilitate more stable convergence. Additionally, we will decrease the router_temperature to 0.1 to encourage more confident routing decisions.",
+    "test_loss": 0.0028156261301289,
     "status": "REJECTED (Rollback)"
   },
   {
     "cycle": 7,
     "dataset_slot": 1,
-    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the current embedding dimension and expert hidden dimension, and adjust the number of groups, experts per group, and number of heads. We will also increase the number of layers to capture more complex patterns in the data, and refine the dropout rate and router temperature to improve the model's performance.",
-    "test_loss": 0.02133614550034205,
+    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the current configuration for most hyperparameters to build upon the success of the previous cycle. We will decrease the learning_rate to 0.00005 to facilitate more stable convergence. Additionally, we will increase the num_heads to 16 to provide more opportunities for feature extraction, and maintain the current router_temperature to encourage more confident routing decisions.",
+    "test_loss": 0.001017132258663575,
     "status": "REJECTED (Rollback)"
   },
   {
     "cycle": 8,
     "dataset_slot": 2,
-    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the current embedding dimension and expert hidden dimension. We will increase the number of groups to 2 and decrease the number of experts per group to 8. This should allow the model to capture more complex patterns in the data and improve its overall performance. We will also maintain the current number of heads and layers, and adjust the dropout rate to 0.01 and the router temperature to 0.01 to refine the model's performance.",
-    "test_loss": 0.022361329570412636,
+    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the expert_hidden_dim at 128 to preserve the complex representations within each expert. We will decrease the learning_rate to 0.00001 to facilitate more stable convergence. Additionally, we will increase the num_heads to 16 to provide more opportunities for feature extraction, and maintain the current router_temperature to encourage more confident routing decisions. The num_groups will be decreased to 2 and experts_per_group will be increased to 16 to reduce the complexity of the model while maintaining its capacity. The n_embd will be maintained at 128, and the num_layers will be increased to 4 to allow for more complex representations. The dropout will be maintained at 0.05 to preserve the regularization.",
+    "test_loss": 0.0029947070435931283,
     "status": "REJECTED (Rollback)"
   },
   {
     "cycle": 9,
     "dataset_slot": 3,
-    "rationale": "To optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the current embedding dimension and expert hidden dimension. We will increase the number of groups to 2 and maintain the number of experts per group to 16. This should allow the model to capture more complex patterns in the data and improve its overall performance. We will also maintain the current number of heads and layers, and adjust the dropout rate to 0.01 and the router temperature to 0.01 to refine the model's performance.",
-    "test_loss": 0.06394541770219803,
+    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will revert to the configuration of cycle 5, which had the best validation loss. We will maintain the current configuration for most hyperparameters to build upon the success of the previous cycle. We will increase the num_layers to 4 to allow for more complex representations, and maintain the current learning_rate to facilitate stable convergence. Additionally, we will maintain the current router_temperature to encourage more confident routing decisions, and decrease the dropout to 0.01 to reduce the regularization and allow the model to capture more complex patterns.",
+    "test_loss": 0.0013955504136780898,
     "status": "REJECTED (Rollback)"
   },
   {
     "cycle": 10,
     "dataset_slot": 1,
-    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will decrease the embedding dimension to 128 and maintain the expert hidden dimension. We will increase the number of groups to 2 and decrease the number of experts per group to 8. This should allow the model to capture more complex patterns in the data and improve its overall performance. We will also maintain the current number of heads and layers, and adjust the dropout rate to 0.01 and the router temperature to 0.01 to refine the model's performance.",
-    "test_loss": 0.7252948729197184,
+    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the current configuration for most hyperparameters to build upon the success of the previous cycle. We will decrease the n_embd to 96 to reduce the dimensionality of the embedding space while preserving the model's capacity. We will maintain the expert_hidden_dim at 128 to preserve the complex representations within each expert. The learning_rate will be increased to 0.0002 to facilitate faster convergence. The num_groups will be maintained at 3, and the experts_per_group will be maintained at 8 to preserve the model's capacity. The num_heads will be decreased to 6 to reduce the complexity of the model while maintaining its ability to extract relevant features. The num_layers will be maintained at 3 to preserve the model's ability to learn complex representations. The dropout will be increased to 0.1 to introduce more regularization and prevent overfitting. The router_temperature will be maintained at 0.2 to encourage more confident routing decisions.",
+    "test_loss": 1.1792416747411092,
     "status": "REJECTED (Rollback)"
   },
   {
     "cycle": 11,
     "dataset_slot": 2,
-    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the current embedding dimension and expert hidden dimension. We will increase the number of groups to 2 and maintain the number of experts per group to 16. This should allow the model to capture more complex patterns in the data and improve its overall performance. We will also increase the number of heads to 8 and maintain the current number of layers, and adjust the dropout rate to 0.01 and the router temperature to 0.01 to refine the model's performance.",
-    "test_loss": 3.427708024978638,
+    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the current configuration for most hyperparameters to build upon the success of the previous cycle. We will increase the expert_hidden_dim to 192 to allow for more complex representations within each expert. The learning_rate will be decreased to 0.00005 to facilitate more stable convergence. The num_heads will be maintained at 8 to preserve the model's ability to extract relevant features. The num_layers will be increased to 4 to allow for more complex representations. The dropout will be decreased to 0.01 to reduce the regularization and allow the model to capture more complex patterns. The router_temperature will be decreased to 0.1 to encourage more confident routing decisions.",
+    "test_loss": 0.0047519936971366404,
     "status": "REJECTED (Rollback)"
   },
   {
     "cycle": 12,
     "dataset_slot": 3,
-    "rationale": "To optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the current embedding dimension and expert hidden dimension. We will increase the number of groups to 2 and maintain the number of experts per group to 16. This should allow the model to capture more complex patterns in the data and improve its overall performance. We will also maintain the current number of heads, increase the number of layers to 3, and adjust the dropout rate to 0.1 and the router temperature to 0.1 to refine the model's performance.",
-    "test_loss": 3.1702618312835695,
+    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the current configuration for most hyperparameters to build upon the success of the previous cycle. We will increase the n_embd to 192 to allow for more complex representations in the embedding space. The expert_hidden_dim will be maintained at 128 to preserve the complex representations within each expert. The learning_rate will be decreased to 0.00001 to facilitate more stable convergence. The num_groups will be maintained at 3, and the experts_per_group will be maintained at 8 to preserve the model's capacity. The num_heads will be increased to 12 to provide more opportunities for feature extraction. The num_layers will be maintained at 3 to preserve the model's ability to learn complex representations. The dropout will be decreased to 0.01 to reduce the regularization and allow the model to capture more complex patterns. The router_temperature will be maintained at 0.2 to encourage more confident routing decisions.",
+    "test_loss": 1.3452977307637533,
     "status": "REJECTED (Rollback)"
   },
   {
     "cycle": 13,
     "dataset_slot": 1,
-    "rationale": "To optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the current embedding dimension and expert hidden dimension. We will increase the number of groups to 4 and decrease the number of experts per group to 4. This should allow the model to capture more complex patterns in the data and improve its overall performance. We will also maintain the current number of heads, decrease the number of layers to 1, and adjust the dropout rate to 0.1 and the router temperature to 0.05 to refine the model's performance.",
-    "test_loss": 0.1859920483827591,
+    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the expert_hidden_dim at 128 to preserve the complex representations within each expert. We will decrease the learning_rate to 0.00005 to facilitate more stable convergence. The num_groups will be maintained at 3, and the experts_per_group will be increased to 12 to provide a balance between model capacity and complexity. The n_embd will be maintained at 128 to preserve the model's ability to learn complex representations. The num_heads will be increased to 10 to provide more opportunities for feature extraction. The num_layers will be increased to 5 to allow for more complex representations. The dropout will be maintained at 0.05 to preserve the regularization. The router_temperature will be decreased to 0.15 to encourage more confident routing decisions.",
+    "test_loss": 1.2526122919718425,
     "status": "REJECTED (Rollback)"
   },
   {
     "cycle": 14,
     "dataset_slot": 2,
-    "rationale": "To optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the current embedding dimension and expert hidden dimension. We will increase the number of groups to 3 and maintain the number of experts per group to 8. This should allow the model to capture more complex patterns in the data and improve its overall performance. We will also maintain the current number of heads, maintain the number of layers to 2, and adjust the dropout rate to 0.03 and the router temperature to 0.03 to refine the model's performance.",
-    "test_loss": 1.3534737014770508,
+    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the current configuration for most hyperparameters to build upon the success of the previous cycles. We will decrease the n_embd to 96 to reduce the dimensionality of the embedding space while preserving the model's capacity. The expert_hidden_dim will be increased to 160 to allow for more complex representations within each expert. The learning_rate will be set to 0.000075 to facilitate stable convergence. The num_groups will be maintained at 3, and the experts_per_group will be increased to 10 to provide a balance between model capacity and complexity. The num_heads will be set to 9 to provide more opportunities for feature extraction. The num_layers will be set to 4 to allow for more complex representations. The dropout will be set to 0.025 to introduce regularization and prevent overfitting. The router_temperature will be set to 0.175 to encourage more confident routing decisions.",
+    "test_loss": 0.949695684115092,
     "status": "REJECTED (Rollback)"
   },
   {
     "cycle": 15,
     "dataset_slot": 3,
-    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will decrease the embedding dimension to 128 and maintain the expert hidden dimension at 512. We will increase the number of groups to 3 and decrease the number of experts per group to 8. This should allow the model to capture more complex patterns in the data and improve its overall performance. We will also maintain the current number of heads at 4, maintain the number of layers at 2, and adjust the dropout rate to 0.02 and the router temperature to 0.02 to refine the model's performance.",
-    "test_loss": 1.8664819939931234,
+    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the expert_hidden_dim at 128 to preserve the complex representations within each expert. We will increase the n_embd to 160 to allow for more complex representations in the embedding space. The learning_rate will be set to 0.000075 to facilitate stable convergence. The num_groups will be maintained at 3, and the experts_per_group will be increased to 11 to provide a balance between model capacity and complexity. The num_heads will be set to 10 to provide more opportunities for feature extraction. The num_layers will be set to 4 to allow for more complex representations. The dropout will be set to 0.025 to introduce regularization and prevent overfitting. The router_temperature will be set to 0.175 to encourage more confident routing decisions.",
+    "test_loss": 1.4143869479497273,
     "status": "REJECTED (Rollback)"
   },
   {
     "cycle": 16,
     "dataset_slot": 1,
-    "rationale": "To optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the current embedding dimension at 256 and increase the expert hidden dimension to 1024. We will decrease the number of groups to 1 and increase the number of experts per group to 32. This should allow the model to capture more complex patterns in the data and improve its overall performance. We will also increase the number of heads to 8, maintain the number of layers at 2, and adjust the dropout rate to 0.01 and the router temperature to 0.01 to refine the model's performance.",
-    "test_loss": 2.772385371526082,
+    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the current configuration for most hyperparameters to build upon the success of the previous cycles. We will decrease the n_embd to 96 to reduce the dimensionality of the embedding space while preserving the model's capacity. The expert_hidden_dim will be increased to 192 to allow for more complex representations within each expert. The learning_rate will be set to 0.00005 to facilitate stable convergence. The num_groups will be maintained at 3, and the experts_per_group will be set to 9 to provide a balance between model capacity and complexity. The num_heads will be set to 8 to provide more opportunities for feature extraction. The num_layers will be set to 3 to allow for more complex representations. The dropout will be set to 0.01 to introduce regularization and prevent overfitting. The router_temperature will be set to 0.1 to encourage more confident routing decisions.",
+    "test_loss": 1.4149260568618773,
     "status": "REJECTED (Rollback)"
   },
   {
     "cycle": 17,
     "dataset_slot": 2,
-    "rationale": "To optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the current embedding dimension at 256 and decrease the expert hidden dimension to 384. We will increase the number of groups to 2 and maintain the number of experts per group at 16. This should allow the model to capture more complex patterns in the data and improve its overall performance. We will also maintain the current number of heads at 4, increase the number of layers to 3, and adjust the dropout rate to 0.04 and the router temperature to 0.04 to refine the model's performance.",
-    "test_loss": 5.133372071584065,
+    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the expert_hidden_dim at 128 to preserve the complex representations within each expert. We will set the n_embd to 128 to allow for a balance between model capacity and complexity. The learning_rate will be set to 0.000075 to facilitate stable convergence. The num_groups will be maintained at 3, and the experts_per_group will be set to 10 to provide a balance between model capacity and complexity. The num_heads will be set to 9 to provide more opportunities for feature extraction. The num_layers will be set to 4 to allow for more complex representations. The dropout will be set to 0.02 to introduce regularization and prevent overfitting. The router_temperature will be set to 0.15 to encourage more confident routing decisions.",
+    "test_loss": 1.80695383866628,
+    "status": "REJECTED (Rollback)"
+  },
+  {
+    "cycle": 18,
+    "dataset_slot": 3,
+    "rationale": "To further optimize the Hierarchical Mixture-of-Experts (MoE) model, we will maintain the expert_hidden_dim at 128 to preserve the complex representations within each expert. We will set the n_embd to 96 to reduce the dimensionality of the embedding space while preserving the model's capacity. The learning_rate will be set to 0.00005 to facilitate stable convergence. The num_groups will be set to 4 to increase the model's capacity for complex representations. The experts_per_group will be set to 8 to provide a balance between model capacity and complexity. The num_heads will be set to 8 to provide more opportunities for feature extraction. The num_layers will be set to 3 to allow for more complex representations. The dropout will be set to 0.01 to introduce regularization and prevent overfitting. The router_temperature will be set to 0.1 to encourage more confident routing decisions.",
+    "test_loss": 1.6900309006373087,
     "status": "REJECTED (Rollback)"
   }
 ]

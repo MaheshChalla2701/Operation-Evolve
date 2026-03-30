@@ -18,6 +18,7 @@ from train import continual_train_loop
 from evaluate import evaluate
 from utils import setup_logging, AccuracyTracker
 from groq_fetcher import fetch_internet_dataset
+from weight_transfer import transfer_compatible_weights
 
 import requests
 from dotenv import load_dotenv
@@ -62,6 +63,7 @@ HISTORY:
 Propose a NEW configuration JSON. You can modify:
 - n_embd (e.g. 64, 128)
 - expert_hidden_dim
+- learning_rate (e.g. 0.001, 0.0005)
 - num_groups
 - experts_per_group
 - num_heads
@@ -81,7 +83,7 @@ Must output ONLY a JSON object with keys "rationale" and "config". No markdown b
             "model": LLM_MODEL,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.7
-        })
+        }, timeout=30)
         response.raise_for_status()
         response_data = response.json()
         
@@ -124,7 +126,9 @@ def run_combined_orchestrator():
         "experts_per_group": config.experts_per_group,
         "num_heads": config.num_heads,
         "num_layers": config.num_layers,
-        "dropout": config.dropout
+        "dropout": config.dropout,
+        "learning_rate": config.learning_rate,
+        "router_temperature": config.router_temperature
     }
     with open(CONFIG_FILE, "w") as f:
         json.dump(base_config_dict, f, indent=2)
@@ -173,11 +177,17 @@ def run_combined_orchestrator():
         
         proposed_config, rationale = call_agent_for_new_config(current_config, metrics, history_str)
         
-        # Compare to see if architecture is actually changing
-        stable_mode = (proposed_config == current_config)
+        # Compare ONLY structural keys to determine if the PyTorch architecture changed
+        arch_keys = ["n_embd", "expert_hidden_dim", "num_groups", "experts_per_group", "num_heads", "num_layers"]
+        stable_mode = all(proposed_config.get(k, current_config.get(k)) == current_config.get(k) for k in arch_keys)
+
+        # Always apply non-structural hyperparameters
+        config.learning_rate = proposed_config.get("learning_rate", config.learning_rate)
+        config.dropout = proposed_config.get("dropout", config.dropout)
+        config.router_temperature = proposed_config.get("router_temperature", config.router_temperature)
         
         if stable_mode:
-            logger.info("[Evolve] Architecture remains STABLE. Preparing for LwF Distillation.")
+            logger.info("[Evolve] Architecture structure is STABLE (only hyperparams changed). Preparing for LwF Distillation.")
             student_model = model  # Keep current weights
             teacher_model = copy.deepcopy(model)
             teacher_model.eval()
@@ -185,15 +195,28 @@ def run_combined_orchestrator():
                 p.requires_grad = False
         else:
             logger.info(f"[Evolve] Agent PROPOSED NEW ARCHITECTURE: {rationale}")
-            logger.info("[Evolve] Building new Pytorch Structure (No Weights Updated)")
+            logger.info("[Evolve] Building new Pytorch Structure for new dimensions.")
             # Build new shell
             config.d_model = proposed_config.get("n_embd", config.d_model)
             config.num_layers = proposed_config.get("num_layers", config.num_layers)
             config.num_heads = proposed_config.get("num_heads", config.num_heads)
             config.expert_hidden_dim = proposed_config.get("expert_hidden_dim", config.expert_hidden_dim)
-            
+            config.num_groups = proposed_config.get("num_groups", config.num_groups)
+            config.experts_per_group = proposed_config.get("experts_per_group", config.experts_per_group)
+
             student_model = build_model(config)
             student_model.to(device)
+
+            # FIX #1 – Warm-start the new architecture by copying all
+            # identically-shaped tensors from the previously trained model.
+            # Without this, the student always starts from random noise and
+            # the validation gate always rejects the proposed architecture.
+            transferred, total = transfer_compatible_weights(model, student_model)
+            logger.info(
+                f"[Evolve] Weight transfer: {transferred}/{total} tensors warm-started "
+                f"({total - transferred} tensors newly initialised)."
+            )
+
             teacher_model = None  # No LwF teacher because architectures don't match
             
         # --- B. PARALLEL TASKS (Update D_Next & Train D_Current) ---

@@ -219,14 +219,19 @@ class HierarchicalMoELM(BaseModel):
         num_layers: int,
         num_classes: int,
         dropout: float = 0.1,
-        router_temperature: float = 1.0
+        router_temperature: float = 1.0,
+        input_dim: int = 16,            # Feature-vector dimension for float inputs
     ):
         super().__init__()
         self.n_embd = n_embd
         self.token_emb = nn.Embedding(vocab_size, self.n_embd)
         self.pos_emb = nn.Embedding(max_seq_len, self.n_embd)
         self.dropout = nn.Dropout(dropout)
-        
+
+        # Registered here so Adam tracks it from the very first step.
+        # Used when the model receives continuous float vectors instead of token IDs.
+        self.float_proj = nn.Linear(input_dim, self.n_embd)
+
         self.layers = nn.ModuleList([
             HierarchicalTransformerBlock(
                 n_embd=self.n_embd,
@@ -238,33 +243,33 @@ class HierarchicalMoELM(BaseModel):
                 router_temperature=router_temperature
             ) for _ in range(num_layers)
         ])
-        
+
         self.ln_f = nn.LayerNorm(self.n_embd)
         self.head = nn.Linear(self.n_embd, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if len(x.shape) == 1:
-            x = x.unsqueeze(0)
-            
-        if x.dtype in [torch.float16, torch.float32, torch.float64]:
-            if not hasattr(self, 'float_proj'):
-                self.float_proj = nn.Linear(x.size(-1), self.n_embd).to(x.device)
-            x = x.unsqueeze(1)
-            h = self.float_proj(x)
+        # Ensure at least 2D: shape [B, F] or [B, S]
+        if x.dim() == 1:
+            x = x.unsqueeze(0)  # [1, F]
+
+        if x.dtype in (torch.float16, torch.float32, torch.float64):
+            # Continuous float input: [B, F] → project to [B, 1, n_embd]
+            h = self.float_proj(x).unsqueeze(1)  # [B, 1, n_embd]
             S = 1
         else:
+            # Discrete token input: [B, S]
             B, S = x.size()
             positions = torch.arange(0, S, dtype=torch.long, device=x.device).unsqueeze(0)
-            h = self.token_emb(x) + self.pos_emb(positions)
-            
+            h = self.token_emb(x) + self.pos_emb(positions)  # [B, S, n_embd]
+
         h = self.dropout(h)
         causal_mask = nn.Transformer.generate_square_subsequent_mask(S).to(h.device) if S > 1 else None
-        
+
         for layer in self.layers:
             h = layer(h, causal_mask)
-            
+
         h = self.ln_f(h)
-        h = h.mean(dim=1)  # global mean pool
+        h = h.mean(dim=1)  # global mean pool → [B, n_embd]
         return self.head(h)
 
 
@@ -298,7 +303,7 @@ def build_model(config: EvolveConfig) -> BaseModel:
         n_embd = config.d_model
         while n_embd % config.num_heads != 0:
             n_embd += 1
-            
+
         model = HierarchicalMoELM(
             vocab_size=config.vocab_size,
             max_seq_len=config.max_seq_len,
@@ -310,7 +315,8 @@ def build_model(config: EvolveConfig) -> BaseModel:
             num_layers=config.num_layers,
             num_classes=config.num_classes,
             dropout=config.dropout,
-            router_temperature=config.router_temperature
+            router_temperature=config.router_temperature,
+            input_dim=config.input_dim,   # FIX: register float_proj in __init__
         )
     else:
         raise ValueError(
