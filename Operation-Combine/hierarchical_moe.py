@@ -8,17 +8,18 @@ class HierarchicalRouter(nn.Module):
     Level 1: Select groups where P(group) >= 1 / num_groups.
     Level 2: Select experts where P(expert|group) >= 1 / experts_per_group.
     """
-    def __init__(self, d_model: int, num_groups: int, experts_per_group: int, top_k: int = 2):
+    def __init__(self, n_embd: int, num_groups: int, experts_per_group: int, top_k: int = 2, router_temperature: float = 1.0):
         super().__init__()
-        self.d_model = d_model
+        self.n_embd = n_embd
         self.num_groups = num_groups
         self.experts_per_group = experts_per_group
         self.top_k = top_k
+        self.router_temperature = router_temperature
         
         # Level 1 gating: W_group
-        self.group_gate = nn.Linear(d_model, num_groups, bias=False)
+        self.group_gate = nn.Linear(n_embd, num_groups, bias=False)
         # Level 2 gating: W_all_experts
-        self.expert_gate = nn.Linear(d_model, num_groups * experts_per_group, bias=False)
+        self.expert_gate = nn.Linear(n_embd, num_groups * experts_per_group, bias=False)
 
     def forward(self, x: torch.Tensor):
         """
@@ -33,7 +34,7 @@ class HierarchicalRouter(nn.Module):
 
         # --- Level 1: Groups ---
         group_logits = self.group_gate(x) # [N, G]
-        group_probs = F.softmax(group_logits, dim=-1) # [N, G]
+        group_probs = F.softmax(group_logits / self.router_temperature, dim=-1) # [N, G]
         
         # Threshold: P(group) >= 1 / G
         group_mask = group_probs >= (1.0 / G) # [N, G]
@@ -43,7 +44,7 @@ class HierarchicalRouter(nn.Module):
         all_expert_logits = all_expert_logits.view(N, G, E_g)
 
         # Softmax over experts WITHIN each group
-        expert_probs = F.softmax(all_expert_logits, dim=-1) # [N, G, E_g]
+        expert_probs = F.softmax(all_expert_logits / self.router_temperature, dim=-1) # [N, G, E_g]
 
         # Threshold: P(expert|group) >= 1 / E_g
         expert_mask = expert_probs >= (1.0 / E_g) # [N, G, E_g]
@@ -90,10 +91,10 @@ class HierarchicalRouter(nn.Module):
 
 class Expert(nn.Module):
     """Standard FeedForward expert."""
-    def __init__(self, d_model: int, d_ff: int):
+    def __init__(self, n_embd: int, expert_hidden_dim: int):
         super().__init__()
-        self.w1 = nn.Linear(d_model, d_ff)
-        self.w2 = nn.Linear(d_ff, d_model)
+        self.w1 = nn.Linear(n_embd, expert_hidden_dim)
+        self.w2 = nn.Linear(expert_hidden_dim, n_embd)
         self.activation = nn.GELU()
 
     def forward(self, x: torch.Tensor):
@@ -101,17 +102,17 @@ class Expert(nn.Module):
 
 
 class HierarchicalMoE(nn.Module):
-    def __init__(self, d_model: int, d_ff: int, num_groups: int, experts_per_group: int, top_k: int = 2):
+    def __init__(self, n_embd: int, expert_hidden_dim: int, num_groups: int, experts_per_group: int, top_k: int = 2, router_temperature: float = 1.0):
         super().__init__()
         self.num_groups = num_groups
         self.experts_per_group = experts_per_group
         self.top_k = top_k
         total_experts = num_groups * experts_per_group
         
-        self.router = HierarchicalRouter(d_model, num_groups, experts_per_group, top_k)
+        self.router = HierarchicalRouter(n_embd, num_groups, experts_per_group, top_k, router_temperature)
         
         self.experts = nn.ModuleList([
-            Expert(d_model, d_ff) for _ in range(total_experts)
+            Expert(n_embd, expert_hidden_dim) for _ in range(total_experts)
         ])
 
     def forward(self, x: torch.Tensor):
@@ -127,6 +128,8 @@ class HierarchicalMoE(nn.Module):
         
         # 1. Routing (Dynamic mask and normalized weights)
         valid_mask, weights = self.router(x) # Both are [N, total_experts]
+        
+        self.last_expert_load = valid_mask.float().mean(dim=0)
         
         output = torch.zeros_like(x)
         

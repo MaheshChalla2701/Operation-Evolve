@@ -58,7 +58,7 @@ flowchart TD
     T4 --> UD3("Update Dataset 3<br/>(Async Target)"):::update
 
     %% --- THE CLIMBING FEEDBACK LOOP ---
-    UD3 --> D2_loop("Dataset 2 Slot"):::dataset
+    T4 --> D2_loop("Dataset 2 Slot"):::dataset
     D2_loop --> ME_left("Evolve Model"):::evolve
     ME_left --> T_left("Train (Side Loop)"):::train
 

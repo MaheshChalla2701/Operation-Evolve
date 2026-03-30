@@ -15,44 +15,35 @@ graph TD
     classDef agent fill:#fff3e0,stroke:#e65100,stroke-width:2px;
     classDef config fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
 
-    CFG[config.py\nHyperparameters & Settings]:::config
+    CFG[config.py\nEvolution Config]:::config
     
-    subgraph Data Layer
-        A[(Dataset_A\nRead-Only / Validation)]:::dataset
-        B[(Dataset_B\nTraining Dataset)]:::dataset
-        C[(Dataset_C\nCandidate Samples)]:::dataset
-        RB[(Replay Buffer\nAnti-Forgetting)]:::dataset
+    subgraph Data Flow
+        A[(Dataset_A\nValidation)]:::dataset
+        B[(Dataset_B\nCurrent Task)]:::dataset
+        RB[(Replay Buffer\nKnowledge Retention)]:::dataset
+        CKPT[(Checkpoints\nBest Models)]:::dataset
     end
 
-    subgraph Operations
-        Train[train.py\nModel Training]:::process
-        Eval[evaluate.py\nEvaluation]:::process
-        Gen[data.py\nCandidate Generation]:::process
-        Mix[data.py\nDataset Mixing]:::process
+    subgraph Hybrid Continual Run
+        Detect[Arch Mode Detection\nStable vs Evolve]:::agent
+        Transfer[Weight Transfer\nPreserving Layers]:::process
+        LwF[LwF Distillation\nTeacher-Student]:::process
+        Train[Train Loop]:::process
+        Eval[Evaluation\nTask & Replay]:::process
     end
-
-    subgraph Agent Layer
-        EvolveAgent[Rule-based Agent]:::agent
-        LLM[LLMAgent\nGroq Integration]:::agent
-        EvolveAgent -.- LLM
-    end
-
-    CFG --> Train
-    CFG --> Eval
-    CFG --> Gen
     
-    A -. Validation .-> Eval
+    CFG --> Detect
+    Detect --> Transfer
+    Detect --> LwF
     B --> Train
     RB --> Train
-    
-    Train ==> Eval
-    Eval ==> Gen
-    Gen --> C
-    
-    C --> |Propose Updates| LLM
-    B --> |Analyze Needs| LLM
-    LLM --> |Surgical Updates| Mix
-    Mix --> B
+    LwF --> Train
+    Transfer --> Train
+    Train --> Eval
+    Eval -. Validation .-> A
+    Eval -. Validation .-> RB
+    Eval -. Rollback .-> CKPT
+    Eval -. Commit New .-> CKPT
 ```
 
 ---
@@ -66,33 +57,33 @@ flowchart TD
     classDef step fill:#fdfefe,stroke:#34495e,stroke-width:1px;
     classDef decision fill:#eaeded,stroke:#2c3e50,stroke-width:2px;
 
-    S1[1. Train Model on Dataset_B]:::step --> S2[2. Evaluate on Dataset_A]:::step
-    S2 --> S3[3. Generate Dataset_C]:::step
-    S3 --> S4[4. Filter Candidates]:::step
-    S4 --> S5[5. Agent Proposes Updates]:::step
-    S5 --> S6[6. Mix Old + New Datasets]:::step
-    S6 --> S7[7. Apply Agent Proposals]:::step
-    S7 --> D8{8. Validation: Did Accuracy Drop?}:::decision
-    D8 -- Yes --> R[Rollback to Previous Version]:::step
-    D8 -- No --> S9[9. Commit & Save Version]:::step
-    S9 --> S10[10. Update Replay Buffer]:::step
-    R --> S11[11. Print Summary]:::step
+    S1[1. Snapshot Arch Config]:::step --> S2[2. Evolve Config]:::step
+    S2 --> S3[3. Detect Mode:\nStable vs Evolve]:::step
+    S3 --> S4[4. Rebuild & Transfer Weights]:::step
+    S4 --> S5[5. Clone Teacher Model]:::step
+    S5 --> S6[6. Continual Train\nCE + LwF]:::step
+    S6 --> S7[7. Evaluate on Dataset_A]:::step
+    S7 --> S8[8. Evaluate on Replay Buffer]:::step
+    S8 --> D9{9. Rollback Decision:\nDid Accuracy Drop?}:::decision
+    D9 -- Yes --> R[Rollback to Best State]:::step
+    D9 -- No --> S10[10. Absorb Task into Replay]:::step
+    R --> S11[11. Commit Next Iteration]:::step
     S10 --> S11
     S11 --> S1
 ```
 
 ### Explanation of Steps:
-1. **Train**: Train the current model (`SimpleNN`, `SimpleTransformer`, or `TransformerLM` for text tokens) on `Dataset_B` plus samples from the Replay Buffer.
-2. **Evaluate**: Score the model strictly against a pristine, untouchable validation set (`Dataset_A`).
-3. **Generate**: Use the updated model to predict labels for features in `Dataset_B` to create `Dataset_C`.
-4. **Filter**: Reject new candidate samples with low confidence scores or near-duplicates (L2 distance check).
-5. **Agent Proposals**: Ask either the **Rule-Based Agent** or the **LLMAgent** to dynamically adapt confidence thresholds, filter noisy samples, and decide which class samples to purge.
-6. **Mixing**: Use an anti-drift ratio (e.g., `0.7 * old_B + 0.3 * filtered_C`) to ensure the dataset doesn't rapidly degrade.
-7. **Apply Updates**: Surgeon-like additions and removals are formally applied to the active dataset instance.
-8. **Validation**: The new accuracy is checked against historical records.
-9. **Commit/Rollback**: If accuracy worsens significantly (`rollback_tolerance`), the system abandons the modifications and reverts to the last known strong dataset variant & model weights.
-10. **Replay Buffer**: Safely persist the most high-confidence new findings to fight catastrophic forgetting.
-11. **Summary Logs**: Track Dataset B sizes, versions, acceptance margins, and trajectory insights.
+1. **Snapshot**: Saves the old architecture configuration to detect changes later.
+2. **Evolve**: The LLM Agent modifies structural hyper-parameters (e.g. `hidden_dim`, `num_heads`) for exploration.
+3. **Detect Mode**: Checks if the architecture mutated. If unchanged, the system is in `Stable` mode (enabling LwF). Wait, if changed, it's `Evolve` mode.
+4. **Rebuild**: If evolved, PyTorch rebuilds the model and surgically transfers compatible legacy weights forward.
+5. **Clone Teacher**: If stable, duplicates the pre-trained weights to act as a Teacher for LwF probability distillation.
+6. **Continual Train**: Learns the new `Dataset_B` task while mixing historical vectors from the Replay Buffer.
+7. **Evaluate (Task)**: Measures accuracy rigidly against ground truth `Dataset_A`.
+8. **Evaluate (Replay)**: Measures retention against the `ReplayBuffer` to monitor catastrophic forgetting.
+9. **Rollback**: If validation accuracy drops OR if the replay buffer accuracy plummets beyond the `10%` divergence threshold, it rejects the epoch!
+10. **Absorb**: High-confidence vectors from current `Dataset_B` are permanently stored via Reservoir Sampling.
+11. **Commit**: Save state, ready for `loop_idx + 1`.
 
 ---
 

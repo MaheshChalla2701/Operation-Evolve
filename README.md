@@ -6,12 +6,36 @@
 
 The repository is modularly broken down into three specialized subsystems. They all share common preprocessing constraints—such as `tiktoken` BPE encodings, token embeddings, and structural parity—ensuring seamless interchangeability.
 
+```mermaid
+graph TD
+    classDef base fill:#f9fbe7,stroke:#827717,stroke-width:2px,color:#33691e;
+    classDef module fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
+    classDef combine fill:#fff3e0,stroke:#e65100,stroke-width:3px,color:#e65100;
+    classDef final fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px,color:#4a148c;
+
+    BM[BASE MoE Model\nHierarchical Routing Network]:::base
+    
+    DE[Dataset-Evolve\nHybrid Continual Learning Engine]:::module
+    ME[Model_Evolve\nAgentic Architecture Pipeline]:::module
+    
+    BM ==> |Provides Architectural Foundation| DE
+    BM ==> |Provides Architectural Foundation| ME
+    
+    DE ==> |LwF + Replay Buffer Logic| OC
+    ME ==> |Groq Structural Evolution Logic| OC
+    
+    OC((Operation-Combine\nUltimate Infinite Orchestrator)):::combine
+    
+    OC ==> |Continuous Execution| INFINITE[Infinite Zero-Downtime Loop]:::final
+```
 ### 1. `Dataset-Evolve/`
-The autonomous **Data Generation & Filtration Engine**.
+The autonomous **Data Generation & Hybrid Continual Learning Engine**.
 - Uses an 11-Step loop to safely introduce generated candidate samples.
 - Features a powerful **Groq LLM Agent** integration. The Agent acts as an analyst looking at class-level failure rates and strategically proposes surgical dataset purges, confidence threshold adjustments, and targeted data mining loops.
 - Employs a Replay Buffer system utilizing L2-distance filtering to introduce synthetic data while rigorously preventing catastrophic forgetting and model drift.
 - Supports Continuous Vectors (`SimpleNN`, `SimpleTransformer`) and Discrete Token sequences (`TransformerLM`).
+- Implements **Learning without Forgetting (LwF)** and a **Replay Buffer Reservoir** to ingest sequential tasks without catastrophic forgetting.
+- Features a powerful Groq LLM Agent integration to strategically propose targeted data mining, class purges, and structural mutations.
 
 ### 2. `Model_Evolve/`
 The **Continuous Learning Pipeline**.
@@ -26,6 +50,12 @@ The **Core Neural Architecture**.
 - Features built-in global Top-K safety fallbacks.
 - Contains the `TransformerLM` wrapping modules demonstrating how standard Causal Multi-Head Attention, Layer Normalizations, Positional indexings, and tokenizer integrations surround the highly efficient sparse layer.
 
+### 4. `Operation-Combine/`
+The **Ultimate Infinite AI Orchestrator**.
+- The pinnacle system that merges the capabilities of the primary pipes into a unified core.
+- Implements an infinite, zero-downtime cyclic loop utilizing multi-threading. While the GPU trains on Data Slot $N$ via LwF and Replay Buffers, a background thread asynchronously hits the Groq API to scrape internet data for Data Slot $N+1$.
+- Performs continuous structural evolution natively with dynamic weight transfers and safe rollback logic.
+
 ---
 
 ## 🏎️ Quick Start
@@ -37,15 +67,15 @@ To dive into the self-evolving operations, navigate to the respective modules an
 git clone https://github.com/MaheshChalla2701/Operation-Evolve.git
 
 # Install required standard dependencies
-pip install torch groq tiktoken pydantic datasets
+pip install torch groq tiktoken pydantic requests python-dotenv
 
-# 1. To explore the Dataset Synthesis loops
+# 1. To explore the Hybrid Continual Learning Engine
 cd Dataset-Evolve
 python main.py
 
-# 2. To explore the Pipelined Sequential Data fetchers
-cd ../Model_Evolve
-python pipelined_orchestrator.py
+# 2. To unleash the Infinite Combined Orchestrator
+cd ../Operation-Combine
+python combined_orchestrator.py
 ```
 
 ## ⚙️ Shared Philosophy

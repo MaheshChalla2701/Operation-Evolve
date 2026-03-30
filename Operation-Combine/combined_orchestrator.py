@@ -198,7 +198,9 @@ def run_combined_orchestrator():
             
         # --- B. PARALLEL TASKS (Update D_Next & Train D_Current) ---
         # 1. Async Fetch Thread
-        next_ds_idx = (loop_idx + 1) % 3
+        # We fetch the sequence two steps ahead so the pipeline perfectly matches 
+        # the diagram (e.g. Training on D2 asynchronously updates D1)
+        next_ds_idx = (loop_idx + 2) % 3
         fetch_thread = threading.Thread(target=_run_fetch_job, args=(config, dataset_buffer, next_ds_idx))
         fetch_thread.start()
         
@@ -249,6 +251,10 @@ def run_combined_orchestrator():
             
             with open(CONFIG_FILE, "w") as f:
                 json.dump(proposed_config, f, indent=2)
+                
+            # Serialize weights to hard drive
+            torch.save(best_weights, "best_model.pt")
+            logger.info("💾 Saved best model weights to 'best_model.pt'")
                 
             status = "ACCEPTED"
         else:
