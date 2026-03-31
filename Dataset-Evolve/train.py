@@ -89,14 +89,17 @@ def train_loop(
     """
     device = config.get_device()
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(
+    optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=config.learning_rate,
         weight_decay=config.weight_decay,
     )
-    # LR scheduler: reduce on plateau
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", patience=1, factor=0.5, verbose=False
+    # Cosine Annealing + Warmup
+    warmup_epochs = max(1, config.epochs_per_loop // 5)
+    sched1 = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.1, total_iters=warmup_epochs)
+    sched2 = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, config.epochs_per_loop - warmup_epochs))
+    scheduler = torch.optim.lr_scheduler.SequentialLR(
+        optimizer, schedulers=[sched1, sched2], milestones=[warmup_epochs]
     )
 
     # --- Build training dataset (Dataset_B + replay samples) ---
@@ -136,7 +139,7 @@ def train_loop(
 
     for epoch in range(1, config.epochs_per_loop + 1):
         loss = train_one_epoch(model, loader, optimizer, criterion, device)
-        scheduler.step(loss)
+        scheduler.step()
         history.append({"epoch": epoch, "loss": loss})
 
         if epoch % config.print_every_n_epochs == 0:
@@ -219,13 +222,16 @@ def continual_train_loop(
     """
     device = config.get_device()
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(
+    optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=config.learning_rate,
         weight_decay=config.weight_decay,
     )
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", patience=1, factor=0.5
+    warmup_epochs = max(1, config.epochs_per_loop // 5)
+    sched1 = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.1, total_iters=warmup_epochs)
+    sched2 = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, config.epochs_per_loop - warmup_epochs))
+    scheduler = torch.optim.lr_scheduler.SequentialLR(
+        optimizer, schedulers=[sched1, sched2], milestones=[warmup_epochs]
     )
 
     use_lwf = stable_mode and (model_old is not None)
@@ -302,7 +308,7 @@ def continual_train_loop(
             total_samples += features.shape[0]
 
         epoch_loss = total_loss / max(total_samples, 1)
-        scheduler.step(epoch_loss)
+        scheduler.step()
         history.append({"epoch": epoch, "loss": epoch_loss})
 
         if epoch % config.print_every_n_epochs == 0:

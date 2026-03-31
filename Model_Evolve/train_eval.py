@@ -1,5 +1,6 @@
 import sys
 import json
+import math
 import torch
 import torch.nn as nn
 from hierarchical_moe import HierarchicalMoE
@@ -167,6 +168,16 @@ def train_and_eval(config_path):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
 
+    # Precompute token byte lengths for BPB evaluation
+    token_bytes_list = []
+    for i in range(vocab_size):
+        try:
+            b_len = len(tokenizer.decode_bytes([i]))
+            token_bytes_list.append(b_len)
+        except Exception:
+            token_bytes_list.append(0) # Special tokens or invalid
+    token_bytes_tensor = torch.tensor(token_bytes_list, dtype=torch.float32, device=device)
+
     optimizer = torch.optim.AdamW(model.parameters(), lr=config["learning_rate"])
     criterion = nn.CrossEntropyLoss()
 
@@ -182,8 +193,16 @@ def train_and_eval(config_path):
     epochs = 4 # Fewer epochs to keep the MoE evolution cycle quick
     batch_size = config.get("batch_size", 8) 
     
+    warmup_epochs = max(1, epochs // 5)
+    sched1 = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.1, total_iters=warmup_epochs)
+    sched2 = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, epochs - warmup_epochs))
+    scheduler = torch.optim.lr_scheduler.SequentialLR(
+        optimizer, schedulers=[sched1, sched2], milestones=[warmup_epochs]
+    )
+    
     metrics = {
         "best_val_loss": float('inf'),
+        "best_val_bpb": float('inf'),
         "final_train_loss": float('inf'),
         "accuracy": 0.0,
         "expert_utilization": [],
@@ -221,6 +240,8 @@ def train_and_eval(config_path):
         total_val_loss = 0.0
         total_correct = 0
         total_tokens = 0
+        total_val_nats = 0.0
+        total_val_bytes = 0.0
         
         all_loads = []
         with torch.no_grad():
@@ -231,6 +252,14 @@ def train_and_eval(config_path):
                 
                 loss = criterion(logits.view(-1, vocab_size), Y.reshape(-1))
                 total_val_loss += loss.item()
+                
+                # --- BPB Calculation ---
+                loss_unreduced = nn.functional.cross_entropy(logits.view(-1, vocab_size), Y.reshape(-1), reduction='none')
+                nbytes = token_bytes_tensor[Y.reshape(-1)]
+                mask = (nbytes > 0).float()
+                total_val_nats += (loss_unreduced * mask).sum().item()
+                total_val_bytes += nbytes.sum().item()
+                # -----------------------
                 
                 # Accuracy tracking
                 preds = torch.argmax(logits.view(-1, vocab_size), dim=-1)
@@ -249,6 +278,7 @@ def train_and_eval(config_path):
         num_val_batches = max(1, (len(val_data) + batch_size - 1) // batch_size)
         avg_val_loss = total_val_loss / num_val_batches
         accuracy = total_correct / max(1, total_tokens)
+        val_bpb = (total_val_nats / (math.log(2) * total_val_bytes)) if total_val_bytes > 0 else float('inf')
         
         if all_loads:
             final_load = torch.stack(all_loads).mean(dim=0).tolist()
@@ -259,6 +289,7 @@ def train_and_eval(config_path):
             "step": step_count,
             "train_loss": avg_train_loss,
             "val_loss": avg_val_loss,
+            "val_bpb": val_bpb,
             "accuracy": accuracy,
             "load_distribution": final_load,
             "lr": config.get("learning_rate", 0.0)
@@ -266,12 +297,15 @@ def train_and_eval(config_path):
         
         if avg_val_loss < metrics["best_val_loss"]:
             metrics["best_val_loss"] = avg_val_loss
+            metrics["best_val_bpb"] = val_bpb
             metrics["accuracy"] = accuracy
             metrics["expert_utilization"] = final_load
             metrics["load_distribution"] = final_load
             
             # Save transient weights for the controller to pick up!
             torch.save(model.state_dict(), "last_run_weights.pt")
+            
+        scheduler.step()
             
     metrics["final_train_loss"] = avg_train_loss
 
