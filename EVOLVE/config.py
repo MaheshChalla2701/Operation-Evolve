@@ -17,7 +17,7 @@ class EvolveConfig:
     # ------------------------------------------------------------------ #
     # Dataset paths                                                        #
     # ------------------------------------------------------------------ #
-    data_dir: str = "data"           # All versioned .pt files are stored here
+    data_dir: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")  # All versioned .pt files are stored here
 
     # ------------------------------------------------------------------ #
     # Dataset generation (seed data)                                       #

@@ -24,7 +24,7 @@ graph TD
     DE ==> |LwF + Replay Buffer Logic| OC
     ME ==> |Groq Structural Evolution Logic| OC
     
-    OC((Operation-Combine\nUltimate Infinite Orchestrator)):::combine
+    OC((EVOLVE\nUltimate Infinite Orchestrator)):::combine
     
     OC ==> |Continuous Execution| INFINITE[Infinite Zero-Downtime Loop]:::final
 ```
@@ -50,7 +50,7 @@ The **Core Neural Architecture**.
 - Features built-in global Top-K safety fallbacks.
 - Contains the `TransformerLM` wrapping modules demonstrating how standard Causal Multi-Head Attention, Layer Normalizations, Positional indexings, and tokenizer integrations surround the highly efficient sparse layer.
 
-### 4. `Operation-Combine/`
+### 4. `EVOLVE/`
 The **Ultimate Infinite AI Orchestrator**.
 - The pinnacle system that merges the capabilities of the primary pipes into a unified core.
 - Implements an infinite, zero-downtime cyclic loop utilizing multi-threading. While the GPU trains on Data Slot $N$ via LwF and Replay Buffers, a background thread asynchronously hits the Groq API to scrape internet data for Data Slot $N+1$.
@@ -74,8 +74,8 @@ cd Dataset-Evolve
 python main.py
 
 # 2. To unleash the Infinite Combined Orchestrator
-cd ../Operation-Combine
-python combined_orchestrator.py
+cd ../EVOLVE
+python evolve.py
 ```
 
 ## ⚙️ Shared Philosophy

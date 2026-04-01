@@ -26,8 +26,9 @@ from dotenv import load_dotenv
 load_dotenv()
 logger = logging.getLogger("evolve.combine")
 
-CONFIG_FILE = "config.json"
-HISTORY_FILE = "evolution_log.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
+HISTORY_FILE = os.path.join(BASE_DIR, "evolution_log.json")
 LLM_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 LLM_MODEL = "llama-3.3-70b-versatile"
 
@@ -115,7 +116,7 @@ def run_combined_orchestrator():
     device = config.get_device()
     
     logger.info("==========================================================")
-    logger.info("  Operation-Combine: Infinite Pipelined LwF Evolution     ")
+    logger.info("  EVOLVE: Infinite Pipelined LwF Evolution                ")
     logger.info("==========================================================")
     
     # Write init config
@@ -276,8 +277,9 @@ def run_combined_orchestrator():
                 json.dump(proposed_config, f, indent=2)
                 
             # Serialize weights to hard drive
-            torch.save(best_weights, "best_model.pt")
-            logger.info("💾 Saved best model weights to 'best_model.pt'")
+            best_model_path = os.path.join(BASE_DIR, "best_model.pt")
+            torch.save(best_weights, best_model_path)
+            logger.info(f"💾 Saved best model weights to '{best_model_path}'")
                 
             status = "ACCEPTED"
         else:
