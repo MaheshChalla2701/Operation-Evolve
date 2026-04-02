@@ -153,7 +153,7 @@ def train_loop(
 
     # --- Early stopping state ---
     best_loss = float("inf")
-    best_state = copy.deepcopy(model.state_dict())
+    best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
     patience_counter = 0
     history: List[Dict[str, Any]] = []
     stopped_at = config.epochs_per_loop
@@ -178,7 +178,7 @@ def train_loop(
         # Early stopping check
         if loss < best_loss - 1e-4:
             best_loss = loss
-            best_state = copy.deepcopy(model.state_dict())
+            best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
             patience_counter = 0
         else:
             patience_counter += 1
@@ -296,7 +296,7 @@ def continual_train_loop(
 
     # ── Training state ───────────────────────────────────────────────────
     best_loss = float("inf")
-    best_state = copy.deepcopy(model.state_dict())
+    best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
     patience_counter = 0
     history: List[Dict[str, Any]] = []
     stopped_at = config.epochs_per_loop
@@ -351,7 +351,7 @@ def continual_train_loop(
         # Early stopping
         if epoch_loss < best_loss - 1e-4:
             best_loss = epoch_loss
-            best_state = copy.deepcopy(model.state_dict())
+            best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
             patience_counter = 0
         else:
             patience_counter += 1

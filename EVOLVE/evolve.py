@@ -231,7 +231,7 @@ def run_combined_orchestrator():
         replay_buffer = RB1(max_size=config.replay_buffer_size)
     
     best_loss = float('inf')
-    best_weights = copy.deepcopy(model.state_dict())
+    best_weights = {k: v.cpu().clone() for k, v in model.state_dict().items()}
     
     loop_idx = 0
     # Main evolution loop — runs indefinitely or until run_time_seconds is reached
@@ -370,7 +370,7 @@ def run_combined_orchestrator():
             logger.info("✅ ACCEPTED! The architecture and weights will be preserved.")
             best_loss = test_loss
             model = student_model  # Commit model
-            best_weights = copy.deepcopy(model.state_dict())
+            best_weights = {k: v.cpu().clone() for k, v in model.state_dict().items()}
             
             with open(CONFIG_FILE, "w") as f:
                 json.dump(proposed_config, f, indent=2)
@@ -399,6 +399,16 @@ def run_combined_orchestrator():
         with open(HISTORY_FILE, "w") as f:
             json.dump(history_log, f, indent=2)
             
+        # Garbage Collection - Free Colab GPU VRAM
+        import gc
+        if 'student_model' in locals() and student_model is not model:
+            del student_model
+        if 'teacher_model' in locals():
+            del teacher_model
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         # Increment loop
         loop_idx += 1
         time.sleep(2)
