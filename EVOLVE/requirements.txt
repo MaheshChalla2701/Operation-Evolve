@@ -1,0 +1,5 @@
+torch
+tiktoken
+groq
+python-dotenv
+requests
