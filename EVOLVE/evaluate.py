@@ -9,6 +9,7 @@ This separation guarantees true performance measurement and prevents
 data leakage between train/val sets.
 """
 
+import math
 import logging
 from typing import Dict, Any
 
@@ -26,13 +27,101 @@ logger = logging.getLogger("evolve.evaluate")
 # Main evaluation function  (always on Dataset_A)
 # ---------------------------------------------------------------------------
 
+def compute_perplexity(avg_loss: float) -> float:
+    """Compute perplexity from average cross-entropy loss."""
+    try:
+        return math.exp(avg_loss)
+    except OverflowError:
+        return float("inf")
+
+
 def evaluate(
     model: nn.Module,
-    dataset_a: SyntheticDataset,
+    dataset_a,                  # SyntheticDataset | TextDataset
     config: EvolveConfig,
 ) -> Dict[str, Any]:
     """
     Evaluate the model on Dataset_A (core / ground-truth validation set).
+
+    In lm mode (config.loss_mode == 'lm'):
+        Returns loss and perplexity.
+
+    In classify mode (config.loss_mode == 'classify'):
+        Returns loss, accuracy, per-class accuracy, and confidence stats.
+    """
+    if config.loss_mode == "lm":
+        return _evaluate_lm(model, dataset_a, config)
+    return _evaluate_classify(model, dataset_a, config)
+
+
+# ---------------------------------------------------------------------------
+# LM evaluation
+# ---------------------------------------------------------------------------
+
+def _evaluate_lm(
+    model: nn.Module,
+    dataset,
+    config: EvolveConfig,
+) -> Dict[str, Any]:
+    """
+    Evaluate language model using causal next-token prediction loss.
+
+    Returns:
+        {
+            "loss"       : float,
+            "perplexity" : float,
+            "num_samples_evaluated": int,
+        }
+    """
+    device = config.get_device()
+    model.eval()
+    criterion = nn.CrossEntropyLoss(ignore_index=-1)
+    loader = DataLoader(dataset, batch_size=config.batch_size, shuffle=False)
+
+    total_loss = 0.0
+    total_samples = 0
+
+    with torch.no_grad():
+        for tokens, _ in loader:
+            tokens = tokens.to(device)           # [B, S]
+            logits = model(tokens)               # [B, S, V]
+
+            shift_logits = logits[:, :-1, :].contiguous()
+            shift_labels = tokens[:, 1:].contiguous()
+            B, S, V = shift_logits.shape
+
+            loss = criterion(
+                shift_logits.view(B * S, V),
+                shift_labels.view(B * S),
+            )
+            total_loss   += loss.item() * B
+            total_samples += B
+
+    avg_loss = total_loss / max(total_samples, 1)
+    ppl = compute_perplexity(avg_loss)
+
+    results = {
+        "loss": avg_loss,
+        "perplexity": ppl,
+        "num_samples_evaluated": total_samples,
+    }
+    logger.info(
+        f"[Eval LM] loss={avg_loss:.4f} | perplexity={ppl:.2f}"
+    )
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Classification evaluation
+# ---------------------------------------------------------------------------
+
+def _evaluate_classify(
+    model: nn.Module,
+    dataset_a,
+    config: EvolveConfig,
+) -> Dict[str, Any]:
+    """
+    Evaluate the model on Dataset_A for classification.
 
     IMPORTANT: This function must ONLY ever be called with Dataset_A to
     provide a true, unbiased performance estimate.
@@ -40,8 +129,8 @@ def evaluate(
     Returns:
         {
             "loss"          : float,
-            "accuracy"      : float (0–100),
-            "per_class_acc" : dict { class_id → accuracy },
+            "accuracy"      : float (0-100),
+            "per_class_acc" : dict { class_id -> accuracy },
             "conf_mean"     : float,
             "conf_min"      : float,
             "conf_max"      : float,

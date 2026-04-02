@@ -75,8 +75,17 @@ def transfer_compatible_weights(
                 new_state[name] = old_tensor.clone()
                 transferred += 1
             else:
+                # Evolved Architecture Support: Handle Resized Tensors
+                # If d_model or heads change, the shapes will differ. We want to pad/truncate.
+                # Find the overlapping bounding box for all dimensions:
+                overlap_slices = tuple(slice(0, min(o, n)) for o, n in zip(old_tensor.shape, new_tensor.shape))
+                
+                # Copy the overlapping subset into the newly initialized tensor
+                new_state[name][overlap_slices] = old_tensor[overlap_slices].clone()
+                transferred += 1
+                
                 skipped_shape.append(
-                    f"{name}: old={tuple(old_tensor.shape)} → new={tuple(new_tensor.shape)}"
+                    f"{name}: old={tuple(old_tensor.shape)} → new={tuple(new_tensor.shape)} (Overlapped slice copied)"
                 )
 
         new_model.load_state_dict(new_state)

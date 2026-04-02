@@ -28,9 +28,11 @@ logger = logging.getLogger("evolve.replay_buffer")
 # Lazy import to avoid a circular import with data.py
 # ---------------------------------------------------------------------------
 
-def _make_synthetic_dataset(features: torch.Tensor, labels: torch.Tensor):
-    """Deferred import of SyntheticDataset to avoid circular imports."""
-    from data import SyntheticDataset  # noqa: PLC0415
+def _make_dataset(features: torch.Tensor, labels: torch.Tensor):
+    """Return TextDataset for long tensors, SyntheticDataset for floats."""
+    from data import SyntheticDataset, TextDataset  # noqa: PLC0415
+    if features.dtype in (torch.int32, torch.int64):
+        return TextDataset(features, labels)
     return SyntheticDataset(features, labels)
 
 
@@ -85,8 +87,14 @@ class ReplayBufferV2:
         features : torch.Tensor, shape (N, D)
         labels   : torch.Tensor, shape (N,)
         """
-        features = features.float().cpu()
-        labels = labels.long().cpu()
+        features = features.cpu()
+        labels = labels.cpu()
+        # Preserve dtype: long for token sequences, float for features
+        if features.is_floating_point():
+            features = features.float()
+        else:
+            features = features.long()
+        labels = labels.long()
         assert features.shape[0] == labels.shape[0], (
             f"features/labels size mismatch: {features.shape[0]} vs {labels.shape[0]}"
         )
@@ -124,14 +132,14 @@ class ReplayBufferV2:
 
     def update(self, dataset) -> None:
         """
-        Add an entire SyntheticDataset (or any Dataset with .features/.labels)
+        Add an entire SyntheticDataset or TextDataset (anything with .features/.labels)
         to the buffer using reservoir sampling.
 
         Call this AFTER each training loop finishes to absorb the current task.
 
         Parameters
         ----------
-        dataset : SyntheticDataset
+        dataset : SyntheticDataset | TextDataset
             Any dataset exposing .features (Tensor) and .labels (Tensor).
         """
         self.add_samples(dataset.features, dataset.labels)
@@ -165,7 +173,7 @@ class ReplayBufferV2:
 
         n = min(batch_size, self._features.shape[0])
         idx = torch.randperm(self._features.shape[0])[:n]
-        return _make_synthetic_dataset(self._features[idx], self._labels[idx])
+        return _make_dataset(self._features[idx], self._labels[idx])
 
     # ------------------------------------------------------------------
     # Persistence

@@ -1,0 +1,4 @@
+*.pt
+*.pth
+EVOLVE/data/
+__pycache__/

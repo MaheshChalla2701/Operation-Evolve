@@ -207,6 +207,17 @@ class HierarchicalTransformerBlock(nn.Module):
 
 
 class HierarchicalMoELM(BaseModel):
+    """
+    Decoder-only Mixture-of-Experts Language Model.
+
+    Supports two input modes:
+      - Token IDs  [B, S] (long)  → full autoregressive LM path
+      - Float vecs [B, F] (float) → projected to [B, 1, n_embd] for compat
+
+    Output: logits [B, S, vocab_size]  (one distribution per token position).
+    Use output[:, -1, :] for next-token prediction at inference time.
+    Use output[:, :-1, :] vs tokens[:, 1:] for training LM loss.
+    """
     def __init__(
         self,
         vocab_size: int,
@@ -217,19 +228,19 @@ class HierarchicalMoELM(BaseModel):
         experts_per_group: int,
         num_heads: int,
         num_layers: int,
-        num_classes: int,
+        num_classes: int,        # kept for API compat, unused in LM mode
         dropout: float = 0.1,
         router_temperature: float = 1.0,
-        input_dim: int = 16,            # Feature-vector dimension for float inputs
+        input_dim: int = 16,     # Feature-vector dimension for float inputs
     ):
         super().__init__()
+        self.vocab_size = vocab_size
         self.n_embd = n_embd
         self.token_emb = nn.Embedding(vocab_size, self.n_embd)
         self.pos_emb = nn.Embedding(max_seq_len, self.n_embd)
         self.dropout = nn.Dropout(dropout)
 
-        # Registered here so Adam tracks it from the very first step.
-        # Used when the model receives continuous float vectors instead of token IDs.
+        # Registered so Adam tracks it. Used for continuous float vector inputs.
         self.float_proj = nn.Linear(input_dim, self.n_embd)
 
         self.layers = nn.ModuleList([
@@ -245,32 +256,40 @@ class HierarchicalMoELM(BaseModel):
         ])
 
         self.ln_f = nn.LayerNorm(self.n_embd)
-        self.head = nn.Linear(self.n_embd, num_classes)
+        # ── Generative head ── outputs logits over the full vocabulary
+        self.head = nn.Linear(self.n_embd, vocab_size, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Ensure at least 2D: shape [B, F] or [B, S]
+        """
+        Args:
+            x: [B, S] long token IDs  OR  [B, F] float feature vector
+        Returns:
+            logits: [B, S, vocab_size]
+        """
         if x.dim() == 1:
-            x = x.unsqueeze(0)  # [1, F]
+            x = x.unsqueeze(0)   # [1, ...]
 
         if x.dtype in (torch.float16, torch.float32, torch.float64):
-            # Continuous float input: [B, F] → project to [B, 1, n_embd]
-            h = self.float_proj(x).unsqueeze(1)  # [B, 1, n_embd]
+            # Float-vector path: [B, F] → [B, 1, n_embd]
+            h = self.float_proj(x).unsqueeze(1)
             S = 1
         else:
-            # Discrete token input: [B, S]
+            # Token-ID path: [B, S]
             B, S = x.size()
-            positions = torch.arange(0, S, dtype=torch.long, device=x.device).unsqueeze(0)
-            h = self.token_emb(x) + self.pos_emb(positions)  # [B, S, n_embd]
+            positions = torch.arange(S, dtype=torch.long, device=x.device).unsqueeze(0)
+            h = self.token_emb(x) + self.pos_emb(positions)   # [B, S, n_embd]
 
         h = self.dropout(h)
-        causal_mask = nn.Transformer.generate_square_subsequent_mask(S).to(h.device) if S > 1 else None
+        causal_mask = (
+            nn.Transformer.generate_square_subsequent_mask(S).to(h.device)
+            if S > 1 else None
+        )
 
         for layer in self.layers:
             h = layer(h, causal_mask)
 
-        h = self.ln_f(h)
-        h = h.mean(dim=1)  # global mean pool → [B, n_embd]
-        return self.head(h)
+        h = self.ln_f(h)           # [B, S, n_embd]
+        return self.head(h)        # [B, S, vocab_size]
 
 
 # ---------------------------------------------------------------------------

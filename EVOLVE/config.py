@@ -44,8 +44,16 @@ class EvolveConfig:
     dropout: float = 0.1
     router_temperature: float = 1.0
     
-    vocab_size: int = 50257          # Vocabulary size for tokenizer (TransformerLM)
-    max_seq_len: int = 128           # Maximum sequence length (TransformerLM)
+    vocab_size: int = 50257          # GPT-2 vocabulary size
+    max_seq_len: int = 128           # Maximum sequence length
+
+    # ------------------------------------------------------------------ #
+    # Loss / Inference mode                                                #
+    # ------------------------------------------------------------------ #
+    loss_mode: str = "lm"            # "lm" = language model | "classify" = 4-class
+    max_new_tokens: int = 200        # Tokens to generate during local inference
+    top_k: int = 50                  # Top-k sampling (0 = greedy)
+    temperature: float = 0.8         # Sampling temperature for generation
 
     # ------------------------------------------------------------------ #
     # Training                                                             #

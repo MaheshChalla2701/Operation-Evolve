@@ -26,15 +26,34 @@ logger = logging.getLogger("evolve.train")
 # Single epoch
 # ---------------------------------------------------------------------------
 
+def _lm_loss(logits: torch.Tensor, tokens: torch.Tensor, criterion: nn.Module) -> torch.Tensor:
+    """
+    Causal LM loss: predict tokens[1:] from logits[:,:-1].
+
+    logits : [B, S, V]
+    tokens : [B, S]  (long)
+    """
+    # shift
+    shift_logits = logits[:, :-1, :].contiguous()            # [B, S-1, V]
+    shift_labels = tokens[:, 1:].contiguous()                # [B, S-1]
+    # flatten
+    B, S, V = shift_logits.shape
+    return criterion(shift_logits.view(B * S, V), shift_labels.view(B * S))
+
+
 def train_one_epoch(
     model: nn.Module,
     loader: DataLoader,
     optimizer: torch.optim.Optimizer,
     criterion: nn.Module,
     device: torch.device,
+    lm_mode: bool = False,
 ) -> float:
     """
     Run one full pass over the DataLoader.
+
+    In lm_mode the loader yields (tokens, tokens) where both tensors are
+    long-dtype token ids.  The shift-based causal LM loss is computed.
 
     Returns:
         avg_loss (float): mean cross-entropy loss over all batches.
@@ -45,15 +64,20 @@ def train_one_epoch(
 
     for features, labels in loader:
         features = features.to(device)
-        labels = labels.to(device)
+        labels   = labels.to(device)
 
         optimizer.zero_grad()
-        logits = model(features)
-        loss = criterion(logits, labels)
+        logits = model(features)          # [B, V] or [B, S, V]
+
+        if lm_mode:
+            loss = _lm_loss(logits, features, criterion)
+        else:
+            loss = criterion(logits, labels)
+
         loss.backward()
         optimizer.step()
 
-        total_loss += loss.item() * features.shape[0]
+        total_loss   += loss.item() * features.shape[0]
         total_samples += features.shape[0]
 
     return total_loss / max(total_samples, 1)
@@ -65,7 +89,7 @@ def train_one_epoch(
 
 def train_loop(
     model: nn.Module,
-    dataset_b: SyntheticDataset,
+    dataset_b,                          # SyntheticDataset | TextDataset
     config: EvolveConfig,
     replay_buffer: Optional[ReplayBuffer] = None,
     loop_idx: int = 0,
@@ -80,6 +104,8 @@ def train_loop(
         If training loss does not improve for config.early_stopping_patience
         consecutive epochs, training stops early and the best model is restored.
 
+    In lm mode (config.loss_mode == 'lm') the causal shift-based loss is used.
+
     Returns a dict:
         {
             "best_state"  : best model state_dict,
@@ -87,8 +113,9 @@ def train_loop(
             "stopped_at"  : epoch at which training stopped,
         }
     """
+    lm_mode = (config.loss_mode == "lm")
     device = config.get_device()
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(ignore_index=-1)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=config.learning_rate,
@@ -138,7 +165,7 @@ def train_loop(
     )
 
     for epoch in range(1, config.epochs_per_loop + 1):
-        loss = train_one_epoch(model, loader, optimizer, criterion, device)
+        loss = train_one_epoch(model, loader, optimizer, criterion, device, lm_mode=lm_mode)
         scheduler.step()
         history.append({"epoch": epoch, "loss": loss})
 
@@ -184,7 +211,7 @@ def train_loop(
 
 def continual_train_loop(
     model: nn.Module,
-    dataset_b: SyntheticDataset,
+    dataset_b,                           # SyntheticDataset | TextDataset
     config: EvolveConfig,
     replay_buffer=None,           # ReplayBufferV2 | None
     model_old: Optional[nn.Module] = None,
@@ -202,14 +229,13 @@ def continual_train_loop(
         loss = CE(logits, labels)   only
         LwF is SKIPPED because architectures differ and old logits are invalid.
 
-    Replay buffer integration:
-        Samples int(batch_size * config.replay_sample_ratio) items from the
-        reservoir replay buffer and prepends them to every mini-batch.
+    In lm mode (config.loss_mode == 'lm') the causal shift-based loss is used
+    for both CE and as the distillation base.
 
     Parameters
     ----------
     model        : nn.Module  (student, mutable)
-    dataset_b    : SyntheticDataset  (current task training data)
+    dataset_b    : SyntheticDataset | TextDataset  (current task training data)
     config       : EvolveConfig
     replay_buffer: ReplayBufferV2 | None
     model_old    : nn.Module | None  (frozen teacher clone; needed in stable mode)
@@ -220,8 +246,9 @@ def continual_train_loop(
     -------
     dict with keys: best_state, history, stopped_at, best_loss, mode
     """
+    lm_mode = (config.loss_mode == "lm")
     device = config.get_device()
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(ignore_index=-1)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=config.learning_rate,
@@ -296,10 +323,14 @@ def continual_train_loop(
                     criterion=criterion,
                     alpha=config.lwf_alpha,
                     temperature=config.lwf_temperature,
+                    lm_mode=lm_mode,
                 )
             else:
-                logits = model(features)
-                loss = criterion(logits, labels)
+                logits = model(features)   # [B, V] or [B, S, V]
+                if lm_mode:
+                    loss = _lm_loss(logits, features, criterion)
+                else:
+                    loss = criterion(logits, labels)
 
             loss.backward()
             optimizer.step()

@@ -46,6 +46,26 @@ class SyntheticDataset(Dataset):
         return f"SyntheticDataset(n={len(self)}, dim={self.features.shape[1]}, classes={self.labels.unique().tolist()})"
 
 
+class TextDataset(Dataset):
+    """Wraps tokenized text sequences for language modeling."""
+
+    def __init__(self, features: torch.Tensor, labels: Optional[torch.Tensor] = None):
+        if labels is None:
+            labels = features
+        assert features.shape[0] == labels.shape[0], "features/labels size mismatch"
+        self.features = features.long()
+        self.labels = labels.long()
+
+    def __len__(self) -> int:
+        return self.features.shape[0]
+
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        return self.features[idx], self.labels[idx]
+
+    def __repr__(self) -> str:
+        return f"TextDataset(n={len(self)}, seq_len={self.features.shape[1]})"
+
+
 # ---------------------------------------------------------------------------
 # Seed data generation
 # ---------------------------------------------------------------------------
@@ -84,6 +104,19 @@ def generate_seed_data(
     # Shuffle
     perm = torch.randperm(features.shape[0])
     return SyntheticDataset(features[perm], labels[perm])
+
+
+def generate_text_seed_data(
+    n: int,
+    max_seq_len: int,
+    vocab_size: int,
+    seed: Optional[int] = None,
+) -> TextDataset:
+    """Generate a synthetic dataset of random token sequences."""
+    if seed is not None:
+        torch.manual_seed(seed)
+    tokens = torch.randint(0, vocab_size, (n, max_seq_len))
+    return TextDataset(tokens, tokens)
 
 
 # ---------------------------------------------------------------------------
@@ -329,16 +362,18 @@ def load_dataset_version(
     name: str,
     version: int,
     data_dir: str,
-) -> SyntheticDataset:
+) -> Dataset:
     """Load a versioned dataset from disk."""
     path = os.path.join(data_dir, f"{name}_v{version}.pt")
     if not os.path.exists(path):
         raise FileNotFoundError(f"Dataset version not found: {path}")
     data = torch.load(path, weights_only=True)
+    if data["features"].dtype in (torch.int, torch.long):
+        return TextDataset(data["features"], data["labels"])
     return SyntheticDataset(data["features"], data["labels"])
 
 
-def save_dataset(dataset: SyntheticDataset, name: str, data_dir: str) -> str:
+def save_dataset(dataset: Dataset, name: str, data_dir: str) -> str:
     """Save a non-versioned dataset (e.g. dataset_A)."""
     os.makedirs(data_dir, exist_ok=True)
     path = os.path.join(data_dir, f"{name}.pt")
@@ -347,10 +382,12 @@ def save_dataset(dataset: SyntheticDataset, name: str, data_dir: str) -> str:
     return path
 
 
-def load_dataset(name: str, data_dir: str) -> SyntheticDataset:
+def load_dataset(name: str, data_dir: str) -> Dataset:
     """Load a non-versioned dataset from disk."""
     path = os.path.join(data_dir, f"{name}.pt")
     if not os.path.exists(path):
         raise FileNotFoundError(f"Dataset not found: {path}")
     data = torch.load(path, weights_only=True)
+    if data["features"].dtype in (torch.int, torch.long):
+        return TextDataset(data["features"], data["labels"])
     return SyntheticDataset(data["features"], data["labels"])

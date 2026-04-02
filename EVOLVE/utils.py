@@ -46,8 +46,9 @@ def setup_logging(level: str = "INFO") -> None:
 
     Call once at the start of main.py.
     """
+    import sys
     numeric_level = getattr(logging, level.upper(), logging.INFO)
-    handler = logging.StreamHandler()
+    handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(numeric_level)
     handler.setFormatter(
         _ColourFormatter(

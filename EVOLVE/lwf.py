@@ -88,6 +88,12 @@ def distillation_loss(
         consistent across temperatures (standard practice in KD literature).
     """
     T = temperature
+    # Flatten sequence dims if tensors are 3-D  [B, S, C] → [B*S, C]
+    if logits_student.dim() == 3:
+        B, S, C = logits_student.shape
+        logits_student = logits_student.reshape(B * S, C)
+        logits_teacher = logits_teacher.reshape(B * S, C)
+
     p_student = F.log_softmax(logits_student / T, dim=-1)
     p_teacher = F.softmax(logits_teacher / T, dim=-1)
 
@@ -108,6 +114,7 @@ def compute_lwf_loss(
     criterion: nn.Module,
     alpha: float = 0.5,
     temperature: float = 2.0,
+    lm_mode: bool = False,
 ) -> torch.Tensor:
     """
     Compute the combined Learning-without-Forgetting loss.
@@ -115,35 +122,50 @@ def compute_lwf_loss(
     total_loss = (1 - alpha) * CE(logits_new, labels)
                +       alpha * T² * KL(soft_new || soft_old)
 
+    In lm_mode the CE component uses the shift-based causal LM loss and the
+    distillation is computed on the shifted (S-1) positions only.
+
     Parameters
     ----------
     model_new  : nn.Module  (student, in train mode)
     model_old  : nn.Module  (teacher, frozen clone from before training)
-    features   : torch.Tensor, shape (B, D)  on correct device
-    labels     : torch.Tensor, shape (B,)    on correct device
-    criterion  : nn.Module  (CrossEntropyLoss or similar)
+    features   : torch.Tensor  — float [B, D] in classify mode; long [B, S] in lm mode
+    labels     : torch.Tensor  — long [B,] in classify mode; same as features in lm mode
+    criterion  : nn.Module  (CrossEntropyLoss)
     alpha      : float  weight for distillation term (0 = CE only, 1 = KL only)
     temperature: float  softmax temperature for distillation
+    lm_mode    : bool   if True, shift-based causal LM loss is used
 
     Returns
     -------
     torch.Tensor
         Combined scalar loss ready for .backward().
-
-    Notes
-    -----
-    model_old is evaluated inside torch.no_grad() to avoid building a graph
-    for the teacher's parameters.
     """
     # Student forward pass (in train mode, gradients enabled)
-    logits_new = model_new(features)
-    ce_loss = criterion(logits_new, labels)
+    logits_new = model_new(features)    # [B, V] or [B, S, V]
+
+    if lm_mode:
+        # CE on shifted positions
+        shift_logits = logits_new[:, :-1, :].contiguous()
+        shift_labels = features[:, 1:].contiguous()
+        B, S, V = shift_logits.shape
+        ce_loss = criterion(shift_logits.view(B * S, V), shift_labels.view(B * S))
+    else:
+        ce_loss = criterion(logits_new, labels)
 
     # Teacher forward pass (no gradients)
     with torch.no_grad():
-        logits_old = model_old(features)
+        logits_old = model_old(features)    # same shape as logits_new
 
-    kl_loss = distillation_loss(logits_new, logits_old, temperature)
+    if lm_mode:
+        # Distill only on the shifted (S-1) positions
+        kl_loss = distillation_loss(
+            logits_new[:, :-1, :].contiguous(),
+            logits_old[:, :-1, :].contiguous(),
+            temperature,
+        )
+    else:
+        kl_loss = distillation_loss(logits_new, logits_old, temperature)
 
     total = (1.0 - alpha) * ce_loss + alpha * kl_loss
 
