@@ -261,7 +261,7 @@ Output ONLY the text of the article. Do not include titles, markdown formatting,
         return TextDataset(features)
 
     except Exception as e:
-        logger.error(f"Failed to fetch text data from Groq: {e}. Using fallback.")
+        logger.warning(f"Groq Free Pier Rate Limit Hit: {e}. Gracefully falling back to offline synthetic dataset.")
         from data import generate_text_seed_data
         return generate_text_seed_data(config.groq_dataset_size, config.max_seq_len, config.vocab_size)
 

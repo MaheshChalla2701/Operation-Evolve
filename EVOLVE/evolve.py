@@ -411,7 +411,7 @@ def run_combined_orchestrator():
 
         # Increment loop
         loop_idx += 1
-        time.sleep(2)
+        time.sleep(15)
         
 if __name__ == "__main__":
     run_combined_orchestrator()
